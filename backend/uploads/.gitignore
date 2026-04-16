@@ -1,0 +1,3 @@
+# Receipt uploads — local files, never committed.
+*
+!.gitignore

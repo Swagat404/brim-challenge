@@ -51,7 +51,7 @@ from agent.tools.base_tool import BaseTool
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are an AI-powered expense intelligence assistant for a fleet trucking company.
+ANALYTICS_SYSTEM_PROMPT = """You are Sift, an AI-powered expense intelligence assistant for a fleet trucking company.
 You have access to 8 months of transaction data (Sep 2025 – Mar 2026) covering ~50 employees
 across 7 departments operating in the USA and Canada.
 
@@ -80,13 +80,42 @@ Prefer query_transactions for simple grouping/aggregation. Use run_sql_query whe
 """
 
 
+POLICY_EDITOR_SYSTEM_PROMPT = """You are Sift's Policy Editor assistant. You sit in a sidebar inside the
+admin's policy editor and help them improve the company's expense policy
+without leaving the page.
+
+What you can do:
+1. Draft new policy sections (call manage_policy_document with action='propose_edit').
+   Confirm with the user before applying via apply_edit.
+2. Generate proactive suggestions for the policy (call manage_policy_suggestions
+   with action='generate'); list, apply, or dismiss them.
+3. Show transactions affected by the most recent policy edit
+   (manage_policy_document action='transactions_affected_by_last_edit').
+4. Find recurring policy violations to discuss patterns
+   (call check_policy_compliance).
+
+Style: be concise, propose concrete edits as JSON the user can approve, and
+always cite which policy section a change touches. Sift Policy Agent leans
+conservative — when in doubt, recommend `review` over `approve` and explain why.
+
+Never invent policy text the user didn't ask for. Never reference Ramp or any
+other product by name — you are Sift.
+"""
+
+
 class ExpenseAgent:
     """
-    Stateless async agent. One instance shared app-wide (see api/deps.py).
+    Stateless async agent. Multiple personas can be instantiated (see api/deps.py).
     Session history is passed in per call — never stored here.
     """
 
-    def __init__(self, tools: list[BaseTool]) -> None:
+    def __init__(
+        self,
+        tools: list[BaseTool],
+        *,
+        system_prompt: str = ANALYTICS_SYSTEM_PROMPT,
+        persona: str = "analytics",
+    ) -> None:
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             raise RuntimeError("ANTHROPIC_API_KEY not set — add it to backend/.env")
@@ -95,7 +124,10 @@ class ExpenseAgent:
         self.max_steps = int(os.environ.get("AGENT_MAX_STEPS", "10"))
         self.tools = {t.name: t for t in tools}
         self._tool_schemas = [t.to_claude_schema() for t in tools]
-        logger.info("ExpenseAgent ready | model=%s tools=%s", self.model, list(self.tools))
+        self._system_prompt = system_prompt
+        self.persona = persona
+        logger.info("ExpenseAgent ready | persona=%s model=%s tools=%s",
+                    persona, self.model, list(self.tools))
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -122,7 +154,7 @@ class ExpenseAgent:
             try:
                 async with self.client.messages.stream(
                     model=self.model,
-                    system=SYSTEM_PROMPT,
+                    system=self._system_prompt,
                     messages=messages,
                     tools=self._tool_schemas,
                     max_tokens=4096,

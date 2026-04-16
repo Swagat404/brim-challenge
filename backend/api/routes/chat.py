@@ -17,9 +17,9 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Literal, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -37,14 +37,24 @@ logger = logging.getLogger(__name__)
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
+    persona: Literal["analytics", "policy_editor"] = "analytics"
 
 
 @router.post("/chat")
-async def chat(request: Request, body: ChatRequest):
-    """Stream agent responses as Server-Sent Events."""
+async def chat(
+    request: Request,
+    body: ChatRequest,
+    persona: Optional[Literal["analytics", "policy_editor"]] = Query(None),
+):
+    """Stream agent responses as Server-Sent Events.
+
+    Persona can be set in the JSON body or via ?persona=… on the URL
+    (URL wins so the frontend can switch personas mid-session if needed).
+    """
     session_id = body.session_id or str(uuid.uuid4())
-    history = get_session_history(session_id)
-    agent = get_agent()
+    chosen_persona = persona or body.persona
+    history = get_session_history(session_id, persona=chosen_persona)
+    agent = get_agent(chosen_persona)
 
     # Append user message to history
     history.append(Message(role=Role.USER, content=body.message))
@@ -78,7 +88,7 @@ async def chat(request: Request, body: ChatRequest):
                 elif event.type == EventType.ERROR:
                     payload["error"] = event.error
                 elif event.type == EventType.DONE:
-                    trim_session_history(session_id)
+                    trim_session_history(session_id, persona=chosen_persona)
 
                 yield {
                     "event": "message",

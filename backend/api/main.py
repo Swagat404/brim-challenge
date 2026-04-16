@@ -19,8 +19,20 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from api.routes import analytics, approvals, chat, policy, reports
+from api.routes import (
+    activity,
+    analytics,
+    approvals,
+    budgets,
+    chat,
+    policy,
+    policy_doc,
+    reports,
+    submissions,
+    suggestions,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -61,12 +73,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Brim Expense Intelligence API",
-    version="1.0.0",
+    title="Sift Expense Intelligence API",
+    version="2.0.0",
     description=(
-        "AI-powered expense intelligence platform. "
-        "NL queries, policy compliance engine, pre-approval workflow, "
-        "and automated expense report generation."
+        "Sift Policy Agent — AI-powered expense intelligence platform. "
+        "Three-state recommendations, policy editor with chat assistant, "
+        "proactive policy suggestions, per-transaction submission flow, "
+        "department + employee budget controls, and a unified activity feed."
     ),
     lifespan=lifespan,
 )
@@ -91,9 +104,19 @@ app.add_middleware(
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(policy.router, prefix="/api", tags=["policy"])
+app.include_router(policy_doc.router, prefix="/api", tags=["policy_doc"])
+app.include_router(suggestions.router, prefix="/api", tags=["suggestions"])
 app.include_router(approvals.router, prefix="/api", tags=["approvals"])
 app.include_router(reports.router, prefix="/api", tags=["reports"])
 app.include_router(analytics.router, prefix="/api", tags=["analytics"])
+app.include_router(activity.router, prefix="/api", tags=["activity"])
+app.include_router(budgets.router, prefix="/api", tags=["budgets"])
+app.include_router(submissions.router, prefix="/api", tags=["submissions"])
+
+# ── Static uploads (receipts) ────────────────────────────────────────────────
+_UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
+_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")
 
 
 @app.get("/health")
