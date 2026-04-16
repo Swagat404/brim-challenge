@@ -62,9 +62,16 @@ ALCOHOL_MCC_CODES: set[int] = {5921, 5813}
 RESTAURANT_MCC_CODES: set[int] = {5812}
 
 TOLL_MERCHANT_PREFIXES = (
+    # State DOT / oversize permits
     "DTOPS", "NDHP", "TXDMV", "WSDOT", "VCN*KANSAS",
     "PZG**MT DEPT", "SD DEPT OF TRANS", "AB TRANSP",
-    "MI SUPERLOAD", "OKC SIZE",
+    "MI SUPERLOAD", "OKC SIZE", "NIC*OVERSIZE",
+    # Bridge / highway toll commissions
+    "NF BRIDGE", "1000 ISLANDS", "A30 EXPRESS",
+    "WV PARKWAYS", "BUFFALO AND FORT", "MACKINAC BRIDGE",
+    "WESTERN DAKOTA ENERGY",
+    # Scale tickets — weigh-station fees repeat legitimately per trip
+    "CAT SCALE",
 )
 
 MAX_ENRICHMENT_ITEMS = 75

@@ -1,9 +1,9 @@
 type PolicyStatus = "in_policy" | "review" | "violation";
 
 const BADGE_STYLES: Record<PolicyStatus, string> = {
-  in_policy: "bg-green-50 text-green-700 border-green-200",
-  review: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  violation: "bg-red-50 text-red-700 border-red-200",
+  in_policy: "bg-zinc-50 text-zinc-700 border-zinc-200/60",
+  review: "bg-zinc-50 text-zinc-700 border-zinc-200/60",
+  violation: "bg-zinc-50 text-zinc-700 border-zinc-200/60",
 };
 
 const BADGE_LABELS: Record<PolicyStatus, string> = {
@@ -31,7 +31,7 @@ export default function PolicyBadge({ status }: { status: PolicyStatus }) {
     >
       <span
         className={`w-1.5 h-1.5 rounded-full ${
-          status === "in_policy" ? "bg-green-500" : status === "review" ? "bg-yellow-500" : "bg-red-500"
+          status === "in_policy" ? "bg-[#8b9286]" : status === "review" ? "bg-zinc-500" : "bg-zinc-800"
         }`}
       />
       {BADGE_LABELS[status]}

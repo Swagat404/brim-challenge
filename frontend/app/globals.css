@@ -21,6 +21,15 @@
     from { height: var(--radix-accordion-content-height); }
     to { height: 0; }
   }
+  
+  @keyframes moveBackground {
+    from {
+      background-position: 0% 0%;
+    }
+    to {
+      background-position: 0% -1000%;
+    }
+  }
 }
 
 @layer base {
@@ -70,11 +79,12 @@
   --muted-foreground: var(--text-secondary);
   --primary: var(--brand-green);
   --primary-foreground: #ffffff;
+  
+  --sky-300: 203, 92%, 53%;
+  --gray-300: 0, 0%, 70%;
 }
 
 body {
-  background: var(--bg-page);
-  color: var(--text-primary);
   font-family: var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -125,10 +135,10 @@ body {
 }
 
 /* Severity badges */
-.badge-critical { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
-.badge-high { background: #fff7ed; color: #9a3412; border: 1px solid #fdba74; }
-.badge-medium { background: #fefce8; color: #854d0e; border: 1px solid #fde047; }
-.badge-low { background: #f0fdf4; color: #166534; border: 1px solid #86efac; }
+.badge-critical { background: #f4f4f5; color: #18181b; border: 1px solid #e4e4e7; }
+.badge-high { background: #f4f4f5; color: #18181b; border: 1px solid #e4e4e7; }
+.badge-medium { background: #f4f4f5; color: #18181b; border: 1px solid #e4e4e7; }
+.badge-low { background: #f4f4f5; color: #18181b; border: 1px solid #e4e4e7; }
 
 /* Streaming cursor */
 @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
@@ -137,7 +147,7 @@ body {
 /* Interactive elements */
 button, [role="button"], summary { cursor: pointer; }
 button:focus-visible, a:focus-visible, [role="button"]:focus-visible, input:focus-visible {
-  outline: 2px solid var(--brand-green);
+  outline: 2px solid #8b9286;
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -151,9 +161,5 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible, input:focu
 
 /* Page background with warm glow */
 .bg-page-gradient {
-  background: #ffffff;
-  background-image:
-    radial-gradient(circle at top right, rgba(255, 140, 60, 0.08), transparent 60%),
-    radial-gradient(circle at bottom left, rgba(22, 163, 74, 0.05), transparent 50%);
-  background-repeat: no-repeat;
+  background: transparent;
 }

@@ -139,8 +139,13 @@ def find_split_candidates(threshold: float = 500.0) -> pd.DataFrame:
     Detect potential split transactions: same employee + merchant + date where
     individual amounts are each below threshold but combined >= threshold.
     This is the classic expense-splitting trick to duck approval gates.
+    Fleet MCCs (fuel, permits, washes, towing) are excluded — repeat charges there are normal.
     """
-    sql = """
+    # Fleet MCC codes — legitimate to have multiple charges same day (fuel, permits, washes, etc.)
+    fleet_mcc_list = ",".join(str(m) for m in (
+        5541, 5542, 9399, 5532, 7538, 7542, 7549, 5046, 5085
+    ))
+    sql = f"""
         WITH grouped AS (
             SELECT
                 employee_id,
@@ -154,6 +159,8 @@ def find_split_candidates(threshold: float = 500.0) -> pd.DataFrame:
             FROM transactions
             WHERE is_operational = 1
               AND debit_or_credit = 'Debit'
+              AND (merchant_category_code IS NULL
+                   OR CAST(merchant_category_code AS INTEGER) NOT IN ({fleet_mcc_list}))
             GROUP BY employee_id, merchant_info_dba_name, transaction_date
             HAVING COUNT(*) > 1
                AND MAX(amount_cad) < ?

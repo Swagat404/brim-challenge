@@ -22,7 +22,6 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarMenuBadge,
 } from "@/components/ui/sidebar";
 
 const navItems = [
@@ -58,44 +57,40 @@ export default function Sidebar() {
 
   return (
     <BaseSidebar collapsible="none">
-      <SidebarHeader className="px-5 py-5 border-b border-sidebar-border">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-green-500 rounded-lg flex items-center justify-center">
-            <Zap className="w-3.5 h-3.5 text-white" />
+      <SidebarHeader className="px-8 py-8">
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 bg-white rounded-full flex items-center justify-center">
+            <Zap className="w-3.5 h-3.5 text-black" fill="currentColor" />
           </div>
-          <span className="font-semibold text-[15px] tracking-tight">
-            Brim Expenses
+          <span className="font-bold text-[18px] tracking-tight text-white">
+            brim
           </span>
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="px-4 py-2">
         <SidebarGroup>
-          <SidebarMenu>
+          <SidebarMenu className="gap-1.5">
             {navItems.map(({ label, href, icon: Icon, badgeKey }) => {
               const active = href === "/" ? path === "/" : path.startsWith(href);
               const count = badgeKey ? badges[badgeKey] : 0;
               return (
                 <SidebarMenuItem key={href}>
-                  <SidebarMenuButton asChild isActive={active}>
-                    <Link href={href}>
-                      <Icon />
-                      <span>{label}</span>
+                  <SidebarMenuButton 
+                    asChild 
+                    isActive={active}
+                    className={active ? "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 bg-white/10 text-white font-medium" : "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"}
+                  >
+                    <Link href={href} className="flex items-center gap-3 w-full">
+                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      <span className="text-[14px] flex-1">{label}</span>
+                      {count > 0 && (
+                        <span className="bg-white/10 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          {count > 999 ? "999+" : count}
+                        </span>
+                      )}
                     </Link>
                   </SidebarMenuButton>
-                  {count > 0 && (
-                    <SidebarMenuBadge
-                      className={
-                        badgeKey === "violation_count"
-                          ? "bg-red-500 text-white"
-                          : badgeKey === "pending_approvals"
-                          ? "bg-amber-500 text-white"
-                          : "bg-sidebar-accent text-sidebar-accent-foreground"
-                      }
-                    >
-                      {count > 999 ? "999+" : count}
-                    </SidebarMenuBadge>
-                  )}
                 </SidebarMenuItem>
               );
             })}
@@ -103,9 +98,16 @@ export default function Sidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="px-5 py-4 border-t border-sidebar-border">
-        <p className="text-[11px] text-muted-foreground leading-relaxed">Fleet Operations</p>
-        <p className="text-[11px] text-muted-foreground">Brim Financial &copy; 2025</p>
+      <SidebarFooter className="px-8 py-8 mt-auto">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-[#8b9286] flex items-center justify-center text-white text-xs font-bold">
+            N
+          </div>
+          <div>
+            <p className="text-[12px] text-white font-medium">Fleet Operations</p>
+            <p className="text-[11px] text-zinc-500">Brim Financial &copy; 2025</p>
+          </div>
+        </div>
       </SidebarFooter>
     </BaseSidebar>
   );
