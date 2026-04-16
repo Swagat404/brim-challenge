@@ -160,6 +160,70 @@ def _parse_policy_text(text: str) -> dict:
 
 def clear_cache() -> None:
     load_policy.cache_clear()
+    _structured_cache["doc"] = None
+
+
+# ── Structured policy (DB-backed, AI-edited) ────────────────────────────────
+#
+# The new Sift Policy Agent stores its agent-facing policy as a structured JSON
+# document in the policy_documents table (see data_pipeline/migrate_v2.py).
+# `load_structured_policy()` is the single read path used by every backend
+# component that needs the live policy.
+#
+# We keep the legacy `load_policy()` above as a thin compatibility shim for
+# existing tools (policy_check_tool, etc.) — it returns the flattened threshold
+# dict those tools were written against.
+
+import json as _json
+from typing import Optional
+
+# Lightweight in-process cache so repeated reads don't hit SQLite each call.
+# The cache is invalidated when the policy is edited via PATCH /api/policy/document
+# (callers should call clear_cache()).
+_structured_cache: dict = {"doc": None}
+
+
+def load_structured_policy() -> Optional[dict]:
+    """Return the current structured policy JSON, or None if none has been bootstrapped.
+
+    Reads from `policy_documents` where `is_current = 1`. Cached in-process.
+    """
+    if _structured_cache["doc"] is not None:
+        return _structured_cache["doc"]
+
+    from data import db
+    df = db.query_df(
+        "SELECT content_json FROM policy_documents WHERE is_current = 1 LIMIT 1"
+    )
+    if df.empty:
+        return None
+    try:
+        doc = _json.loads(df.iloc[0]["content_json"])
+    except (ValueError, KeyError):
+        logger.exception("policy_documents row has invalid JSON")
+        return None
+    _structured_cache["doc"] = doc
+    return doc
+
+
+def save_structured_policy(content: dict, *, updated_by: str = "system") -> int:
+    """Replace the current policy document. Returns the new row id.
+
+    Atomically: clears any existing `is_current=1` row and inserts a fresh one.
+    """
+    from datetime import datetime
+    from data import db
+    now = datetime.utcnow().isoformat()
+    with db.get_conn() as conn:
+        conn.execute("UPDATE policy_documents SET is_current = 0 WHERE is_current = 1")
+        cur = conn.execute(
+            """INSERT INTO policy_documents (content_json, is_current, updated_at, updated_by)
+               VALUES (?, 1, ?, ?)""",
+            (_json.dumps(content), now, updated_by),
+        )
+        new_id = cur.lastrowid
+    _structured_cache["doc"] = content
+    return new_id or 0
 
 
 # MCC category descriptions (used for policy context enrichment)

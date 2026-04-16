@@ -1,18 +1,21 @@
 """
 ApprovalTool — AI-powered pre-approval workflow.
 
-For any transaction needing approval, assembles a full context packet:
-- Employee spend history and patterns
-- Department budget status
-- Policy compliance check
-- AI approve/deny recommendation with reasoning
+Pipeline:
+    1. `_get_pending`     list pending approvals
+    2. `_recommend`       for one pending approval:
+                            a. check structured-policy auto_approval_rules first
+                               → if a rule matches, mark `approved` and emit
+                                 `auto_approved` activity (no Claude call)
+                            b. otherwise assemble full context (employee,
+                               department budgets, spend history, submission,
+                               missing-requirements check) and ask Claude for a
+                               three-state {approve|review|reject} decision +
+                               cited policy section. Persist + emit `recommended`.
+    3. `_decide`          record a human approve/reject; emit `human_decision`.
 
-Finance manager gets everything needed in one view. No back-and-forth.
-
-Example output:
-"Marcus Rivera (Long-Haul Driver, Operations) is requesting $1,450 at Flying J Truck
-Stop. His department has $3,200 remaining in monthly budget. He averages $1,200/week
-on fuel. Recommendation: APPROVE — consistent with fleet operations pattern, MCC 5541."
+This file is intentionally the only place that writes to `approvals` for
+recommendations — keeps the activity stream consistent.
 """
 from __future__ import annotations
 
@@ -29,7 +32,13 @@ from pydantic import BaseModel, Field
 from agent.models import ToolResult
 from agent.tools.base_tool import BaseTool
 from data import db
-from data.policy_loader import FLEET_MCC_CODES, MCC_DESCRIPTIONS, load_policy
+from data.policy_loader import (
+    FLEET_MCC_CODES,
+    MCC_DESCRIPTIONS,
+    load_policy,
+    load_structured_policy,
+)
+from services import activity, auto_approval, submission_check
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +48,7 @@ class ApprovalTool(BaseTool):
     description = (
         "Generate an AI approval recommendation for a pending expense transaction. "
         "Returns employee context, department budget status, spending history, "
-        "and a clear approve/deny recommendation with reasoning. "
+        "and a clear approve / review / reject recommendation with reasoning. "
         "Use when asked about: approvals, pending expenses, should we approve, "
         "pre-approval requests, or reviewing specific transactions."
     )
@@ -82,7 +91,6 @@ class ApprovalTool(BaseTool):
                ORDER BY a.amount DESC"""
         )
         if df.empty:
-            # Auto-populate from transactions > threshold that haven't been reviewed
             policy = load_policy()
             threshold = policy["pre_auth_threshold"]
             pending_txns = db.query_df(
@@ -98,7 +106,6 @@ class ApprovalTool(BaseTool):
             )
             if pending_txns.empty:
                 return self.ok("No pending approvals.", data=[])
-            # Seed the approvals table
             now = datetime.utcnow().isoformat()
             rows = [
                 (row["rowid"], row["employee_id"], row["amount_cad"],
@@ -130,9 +137,7 @@ class ApprovalTool(BaseTool):
             return self.err("transaction_rowid required for recommend action")
 
         await self.emit_progress("Assembling employee context…")
-        policy = load_policy()
 
-        # Get the transaction — use explicit aliases so merchant/state/country resolve correctly
         txn_df = db.query_df(
             """SELECT rowid, *,
                       merchant_info_dba_name AS merchant,
@@ -148,16 +153,16 @@ class ApprovalTool(BaseTool):
         emp_id = txn.get("employee_id", "")
         emp = db.get_employee(emp_id)
 
-        # Employee spend history (last 90 days)
-        history_df = db.query_df(
-            """SELECT transaction_date, merchant_info_dba_name, amount_cad, merchant_category_code
-               FROM transactions
-               WHERE employee_id = ? AND is_operational = 1 AND debit_or_credit = 'Debit'
-               ORDER BY transaction_date DESC LIMIT 30""",
-            (emp_id,),
+        approval_id = _approval_id_for_txn(params.transaction_rowid)
+
+        result = await recommend_for_transaction(
+            txn=txn,
+            employee=emp,
+            approval_id=approval_id,
+            actor="agent",
         )
 
-        # Monthly spend vs budget
+        # Build a chart of the employee's monthly spend for the chat reply
         monthly_df = db.query_df(
             """SELECT strftime('%Y-%m', transaction_date) AS month, SUM(amount_cad) AS total
                FROM transactions
@@ -165,125 +170,35 @@ class ApprovalTool(BaseTool):
                GROUP BY month ORDER BY month DESC LIMIT 6""",
             (emp_id,),
         )
-
-        await self.emit_progress("Generating AI recommendation…")
-        recommendation = await self._ai_recommend(txn, emp, history_df, monthly_df, policy)
-
-        # Persist recommendation to approvals table
-        db.execute(
-            """UPDATE approvals SET ai_recommendation = ?, ai_reasoning = ?
-               WHERE transaction_rowid = ?""",
-            (recommendation["decision"], recommendation["reasoning"], params.transaction_rowid),
-        )
-
-        summary = (
-            f"Recommendation: {recommendation['decision'].upper()} — {recommendation['reasoning']}\n\n"
-            f"Employee: {emp.get('name', emp_id)} ({emp.get('role', '')}, {emp.get('department', '')})\n"
-            f"Amount: ${txn.get('amount_cad', 0):.2f} CAD at {txn.get('merchant', '')}\n"
-            f"Monthly budget: ${emp.get('monthly_budget', 0):,.0f} | "
-            f"Spent this month: ${monthly_df.iloc[0]['total'] if not monthly_df.empty else 0:,.2f}"
-        )
-
         chart = {
             "type": "bar",
             "data": monthly_df.rename(columns={"month": "name", "total": "value"}).to_dict("records"),
             "xKey": "name",
             "yKey": "value",
             "yLabel": "Monthly Spend (CAD)",
-            "title": f"{emp.get('name', emp_id)} — Monthly Spend History",
+            "title": f"{(emp or {}).get('name', emp_id)} — Monthly Spend History",
         }
 
-        return self.ok(
-            text=summary,
-            data=[{**txn, **recommendation, "employee_context": emp}],
-            chart=chart,
+        summary = (
+            f"Recommendation: {result['decision'].upper()} — {result['reasoning']}\n\n"
+            f"Employee: {(emp or {}).get('name', emp_id)} "
+            f"({(emp or {}).get('role', '')}, {(emp or {}).get('department', '')})\n"
+            f"Amount: ${float(txn.get('amount_cad') or 0):.2f} CAD at {txn.get('merchant', '')}\n"
         )
+        if result.get("policy_citation"):
+            summary += f"Policy: {result['policy_citation']}\n"
 
-    async def _ai_recommend(
-        self,
-        txn: dict,
-        emp: dict | None,
-        history_df,
-        monthly_df,
-        policy: dict,
-    ) -> dict:
-        emp = emp or {}
-        mcc = int(txn.get("merchant_category_code") or 0)
-        amount = float(txn.get("amount_cad") or 0)
-        merchant = txn.get("merchant", "Unknown")
+        return self.ok(text=summary, data=[result], chart=chart)
 
-        avg_monthly = monthly_df["total"].mean() if not monthly_df.empty else 0
-        recent_similar = history_df[
-            history_df["merchant_info_dba_name"] == merchant
-        ] if not history_df.empty else []
-
-        context = {
-            "employee": {
-                "name": emp.get("name", "Unknown"),
-                "role": emp.get("role", "Unknown"),
-                "department": emp.get("department", "Unknown"),
-                "monthly_budget": emp.get("monthly_budget", 0),
-                "avg_monthly_spend": round(avg_monthly, 2),
-            },
-            "transaction": {
-                "amount_cad": round(amount, 2),
-                "merchant": merchant,
-                "mcc": mcc,
-                "mcc_description": MCC_DESCRIPTIONS.get(mcc, "Unknown"),
-                "is_fleet_operation": mcc in FLEET_MCC_CODES,
-                "date": txn.get("transaction_date", ""),
-            },
-            "policy": {
-                "pre_auth_threshold": policy["pre_auth_threshold"],
-                "over_threshold_by": round(amount - policy["pre_auth_threshold"], 2),
-            },
-            "history": {
-                "similar_merchant_charges": len(recent_similar),
-                "recent_transactions": history_df.head(5).to_dict("records") if not history_df.empty else [],
-            },
-        }
-
-        prompt = f"""You are a finance manager AI for a fleet trucking company reviewing an expense.
-
-<context>
-{json.dumps(context, indent=2, default=str)}
-</context>
-
-Based on this context, provide an approval recommendation.
-
-Respond with JSON only:
-{{"decision": "approve" | "deny", "reasoning": "1-2 sentence plain English explanation"}}"""
-
-        try:
-            client = anthropic.AsyncAnthropic()
-            msg = await asyncio.wait_for(
-                client.messages.create(
-                    model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
-                    max_tokens=256,
-                    messages=[{"role": "user", "content": prompt}],
-                ),
-                timeout=20.0,
-            )
-            raw = msg.content[0].text.strip()
-            if raw.startswith("```"):
-                raw = "\n".join(raw.split("\n")[1:-1])
-            return json.loads(raw)
-        except Exception as exc:
-            logger.warning("AI recommendation failed: %s", exc)
-            # Fallback heuristic
-            if mcc in FLEET_MCC_CODES:
-                return {"decision": "approve", "reasoning": "Fleet operation expense — consistent with driver role."}
-            if amount > 1000:
-                return {"decision": "deny", "reasoning": f"${amount:.0f} exceeds typical non-fleet expense — manual review needed."}
-            return {"decision": "approve", "reasoning": "Within normal range for role and department."}
-
-    # ── Record decision ───────────────────────────────────────────────────────
+    # ── Record human decision ────────────────────────────────────────────────
 
     async def _decide(self, params: InputSchema) -> ToolResult:
         if not params.transaction_rowid or not params.decision:
             return self.err("transaction_rowid and decision required")
 
         now = datetime.utcnow().isoformat()
+        approval_id = _approval_id_for_txn(params.transaction_rowid)
+
         rows = db.execute(
             """UPDATE approvals SET status = ?, approver_id = ?, resolved_at = ?
                WHERE transaction_rowid = ?""",
@@ -292,7 +207,391 @@ Respond with JSON only:
         if rows == 0:
             return self.err(f"No approval found for transaction {params.transaction_rowid}")
 
+        activity.emit(
+            "human_decision",
+            f"{params.decision.upper()} by {params.approver_id or 'system'}",
+            actor=params.approver_id or "system",
+            transaction_rowid=params.transaction_rowid,
+            approval_id=approval_id,
+            metadata={"decision": params.decision},
+        )
+
         return self.ok(
             f"Transaction {params.transaction_rowid} marked as {params.decision.upper()}.",
             data=[{"transaction_rowid": params.transaction_rowid, "status": params.decision}],
         )
+
+
+# ── Public helpers (importable by routes / seeders / tests) ──────────────────
+
+
+async def recommend_for_transaction(
+    *,
+    txn: dict,
+    employee: Optional[dict],
+    approval_id: Optional[int],
+    actor: str = "agent",
+) -> dict:
+    """Run the full recommendation pipeline for one transaction.
+
+    1. Try auto-approval rules (no Claude call when matched).
+    2. Otherwise call Claude with structured policy + budgets + submission
+       context; persist three-state result; emit `recommended` activity.
+
+    Returns: {
+        "decision": "approve"|"review"|"reject",
+        "reasoning": str,
+        "policy_citation": str,
+        "cited_section_id": str,
+        "auto_approved": bool,
+    }
+    """
+    structured = load_structured_policy()
+    legacy = load_policy()
+    amount = float(txn.get("amount_cad") or 0)
+    mcc = int(txn.get("merchant_category_code") or 0) or None
+    role = (employee or {}).get("role")
+
+    # 1. Auto-approval check
+    auto_cfg = (structured or {}).get("auto_approval_rules", {}) if structured else {}
+    matched_rule = auto_approval.find_matching_rule(
+        amount=amount, mcc=mcc, role=role,
+        auto_approval_config=auto_cfg,
+    )
+    if matched_rule:
+        return _apply_auto_approval(
+            txn=txn, approval_id=approval_id, rule=matched_rule, actor=actor,
+        )
+
+    # 2. Submission requirements check (informs the prompt and may force `review`)
+    sub_row = _load_submission(int(txn["rowid"]))
+    requirements = (structured or {}).get("submission_requirements", []) if structured else []
+    missing = submission_check.missing_fields(
+        amount=amount, mcc=mcc, submission=sub_row, requirements=requirements,
+    )
+
+    # 3. Build prompt context
+    history_df = db.query_df(
+        """SELECT transaction_date, merchant_info_dba_name, amount_cad, merchant_category_code
+             FROM transactions
+            WHERE employee_id = ? AND is_operational = 1 AND debit_or_credit = 'Debit'
+            ORDER BY transaction_date DESC LIMIT 10""",
+        ((employee or {}).get("id", ""),),
+    )
+    monthly_df = db.query_df(
+        """SELECT strftime('%Y-%m', transaction_date) AS month, SUM(amount_cad) AS total
+             FROM transactions
+            WHERE employee_id = ? AND is_operational = 1 AND debit_or_credit = 'Debit'
+            GROUP BY month ORDER BY month DESC LIMIT 6""",
+        ((employee or {}).get("id", ""),),
+    )
+    dept_budget = _load_department_budget((employee or {}).get("department", ""))
+
+    context = _build_context(
+        txn=txn, employee=employee, history_df=history_df, monthly_df=monthly_df,
+        dept_budget=dept_budget, structured_policy=structured,
+        legacy_policy=legacy, submission=sub_row, missing=missing,
+    )
+
+    # 4. Ask Claude
+    result = await _ask_claude(context, missing=missing)
+
+    # 5. Persist + emit
+    if approval_id is not None:
+        db.execute(
+            """UPDATE approvals
+                  SET ai_decision = ?, ai_reasoning = ?,
+                      policy_citation = ?, cited_section_id = ?
+                WHERE id = ?""",
+            (result["decision"], result["reasoning"],
+             result.get("policy_citation"), result.get("cited_section_id"),
+             approval_id),
+        )
+
+    activity.emit(
+        "recommended",
+        f"AI recommended {result['decision'].upper()}: {result['reasoning'][:140]}",
+        actor=actor,
+        transaction_rowid=int(txn["rowid"]),
+        approval_id=approval_id,
+        metadata={
+            "decision": result["decision"],
+            "cited_section_id": result.get("cited_section_id"),
+            "missing_fields": [m["missing"] for m in missing] if missing else [],
+        },
+    )
+
+    result["auto_approved"] = False
+    return result
+
+
+def _apply_auto_approval(
+    *,
+    txn: dict,
+    approval_id: Optional[int],
+    rule: dict,
+    actor: str,
+) -> dict:
+    """Mark an approval as auto-approved per a matched rule. No Claude call."""
+    citation = rule.get("rationale") or f"Auto-approval rule '{rule.get('id')}'"
+    decision = "approve"
+    reasoning = (
+        f"Auto-approved under rule '{rule.get('id')}': {citation}"
+    )
+
+    if approval_id is not None:
+        db.execute(
+            """UPDATE approvals
+                  SET status = 'approved',
+                      ai_decision = ?,
+                      ai_reasoning = ?,
+                      policy_citation = ?,
+                      cited_section_id = ?,
+                      approver_id = ?,
+                      resolved_at = ?
+                WHERE id = ?""",
+            (decision, reasoning, citation, f"auto:{rule.get('id')}",
+             "agent", datetime.utcnow().isoformat(), approval_id),
+        )
+
+    activity.emit(
+        "auto_approved",
+        f"Auto-approved via rule '{rule.get('id')}'",
+        actor=actor,
+        transaction_rowid=int(txn["rowid"]),
+        approval_id=approval_id,
+        metadata={"rule_id": rule.get("id"), "amount": float(txn.get("amount_cad") or 0)},
+    )
+
+    return {
+        "decision": decision,
+        "reasoning": reasoning,
+        "policy_citation": citation,
+        "cited_section_id": f"auto:{rule.get('id')}",
+        "auto_approved": True,
+    }
+
+
+def _build_context(
+    *,
+    txn: dict,
+    employee: Optional[dict],
+    history_df,
+    monthly_df,
+    dept_budget: Optional[dict],
+    structured_policy: Optional[dict],
+    legacy_policy: dict,
+    submission: Optional[dict],
+    missing: list[dict],
+) -> dict:
+    emp = employee or {}
+    mcc = int(txn.get("merchant_category_code") or 0)
+    amount = float(txn.get("amount_cad") or 0)
+    avg_monthly = float(monthly_df["total"].mean()) if not monthly_df.empty else 0
+    spent_this_month = float(monthly_df["total"].iloc[0]) if not monthly_df.empty else 0
+
+    context = {
+        "employee": {
+            "name": emp.get("name", "Unknown"),
+            "role": emp.get("role", "Unknown"),
+            "department": emp.get("department", "Unknown"),
+            "monthly_budget": emp.get("monthly_budget", 0),
+            "avg_monthly_spend": round(avg_monthly, 2),
+            "spent_this_month": round(spent_this_month, 2),
+        },
+        "transaction": {
+            "amount_cad": round(amount, 2),
+            "merchant": txn.get("merchant", "Unknown"),
+            "mcc": mcc,
+            "mcc_description": MCC_DESCRIPTIONS.get(mcc, "Unknown"),
+            "is_fleet_operation": mcc in FLEET_MCC_CODES,
+            "date": str(txn.get("transaction_date", "")),
+        },
+        "department_budget": (
+            {
+                "monthly_cap": dept_budget["monthly_cap"],
+                "mtd_spend": dept_budget["mtd_spend"],
+                "pct_used": (
+                    round(100 * dept_budget["mtd_spend"] / dept_budget["monthly_cap"], 1)
+                    if dept_budget["monthly_cap"] else None
+                ),
+            }
+            if dept_budget else None
+        ),
+        "submission": _summarize_submission(submission),
+        "missing_required_fields": missing,
+        "policy": {
+            "pre_auth_threshold": legacy_policy["pre_auth_threshold"],
+            "over_threshold_by": round(amount - legacy_policy["pre_auth_threshold"], 2),
+            "sections": [
+                {"id": s["id"], "title": s["title"], "body": s["body"][:600],
+                 "hidden_notes": s.get("hidden_notes", [])}
+                for s in (structured_policy or {}).get("sections", [])
+            ] if structured_policy else [],
+        },
+        "history": {
+            "recent_transactions": history_df.head(5).to_dict("records") if not history_df.empty else [],
+        },
+    }
+    return context
+
+
+def _summarize_submission(submission: Optional[dict]) -> Optional[dict]:
+    if not submission:
+        return None
+    attendees = []
+    raw = submission.get("attendees_json")
+    if raw:
+        try:
+            attendees = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            attendees = []
+    return {
+        "has_receipt": bool(submission.get("receipt_url")),
+        "receipt_ocr_text": (submission.get("receipt_ocr_text") or "")[:1500] or None,
+        "memo": submission.get("memo") or None,
+        "business_purpose": submission.get("business_purpose") or None,
+        "attendees": attendees,
+        # GL code is intentionally NOT included in the prompt context
+        # (per the Sift Policy Agent spec — accounting codes don't drive
+        # policy decisions, matching Ramp's documented behaviour).
+    }
+
+
+def _approval_id_for_txn(transaction_rowid: int) -> Optional[int]:
+    df = db.query_df(
+        "SELECT id FROM approvals WHERE transaction_rowid = ? LIMIT 1",
+        (transaction_rowid,),
+    )
+    return int(df.iloc[0]["id"]) if not df.empty else None
+
+
+def _load_submission(transaction_rowid: int) -> Optional[dict]:
+    df = db.query_df(
+        "SELECT * FROM transaction_submissions WHERE transaction_rowid = ? LIMIT 1",
+        (transaction_rowid,),
+    )
+    return df.iloc[0].to_dict() if not df.empty else None
+
+
+def _load_department_budget(department: str) -> Optional[dict]:
+    if not department:
+        return None
+    df = db.query_df(
+        "SELECT monthly_cap FROM department_budgets WHERE department = ? LIMIT 1",
+        (department,),
+    )
+    if df.empty:
+        return None
+    cap = float(df.iloc[0]["monthly_cap"])
+    mtd_df = db.query_df(
+        """SELECT COALESCE(SUM(amount_cad), 0) AS spent
+             FROM transactions
+            WHERE department = ?
+              AND is_operational = 1
+              AND debit_or_credit = 'Debit'
+              AND transaction_date >= date('now', 'start of month')""",
+        (department,),
+    )
+    spent = float(mtd_df.iloc[0]["spent"] or 0)
+    return {"monthly_cap": cap, "mtd_spend": spent}
+
+
+# ── Claude prompt ────────────────────────────────────────────────────────────
+
+
+_PROMPT_TEMPLATE = """You are the policy compliance reviewer for a fleet trucking company's expense system.
+
+Read the structured context below and produce a single JSON object with the schema:
+
+{{
+  "decision": "approve" | "review" | "reject",
+  "reasoning": "<one to three plain-English sentences a finance manager would read>",
+  "policy_citation": "<short snippet of the policy text or rule that drove your decision>",
+  "cited_section_id": "<the matching policy.sections[].id, or empty string if no specific section>"
+}}
+
+Rules:
+- "approve" = clearly within policy and within the employee's normal pattern.
+- "review"  = ambiguous, missing required fields, or borderline budget. Lean toward review when in doubt — Sift Policy Agent is intentionally conservative.
+- "reject"  = clear policy violation (restricted MCC, personal expense on corporate card, etc.).
+- If `missing_required_fields` is non-empty, you MUST decide "review" and your `reasoning` must reference the specific missing field(s).
+- Cite a real section id from policy.sections when possible.
+- Output ONLY the JSON object. No prose before or after.
+
+<context>
+{context}
+</context>
+"""
+
+
+async def _ask_claude(context: dict, *, missing: list[dict]) -> dict:
+    prompt = _PROMPT_TEMPLATE.format(context=json.dumps(context, indent=2, default=str))
+    fallback_reasoning = _fallback_reasoning(context, missing)
+
+    try:
+        client = anthropic.AsyncAnthropic()
+        msg = await asyncio.wait_for(
+            client.messages.create(
+                model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"),
+                max_tokens=512,
+                messages=[{"role": "user", "content": prompt}],
+            ),
+            timeout=25.0,
+        )
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            lines = raw.split("\n")
+            raw = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+        parsed = json.loads(raw)
+        decision = parsed.get("decision", "review").lower()
+        if decision not in {"approve", "review", "reject"}:
+            decision = "review"
+        return {
+            "decision": decision,
+            "reasoning": parsed.get("reasoning") or fallback_reasoning["reasoning"],
+            "policy_citation": parsed.get("policy_citation") or fallback_reasoning["policy_citation"],
+            "cited_section_id": parsed.get("cited_section_id") or "",
+        }
+    except Exception as exc:
+        logger.warning("AI recommendation failed: %s — using fallback", exc)
+        return fallback_reasoning
+
+
+def _fallback_reasoning(context: dict, missing: list[dict]) -> dict:
+    """Non-LLM fallback so the system still produces a structured response on API failure."""
+    if missing:
+        m = missing[0]
+        return {
+            "decision": "review",
+            "reasoning": (
+                f"Missing required fields ({', '.join(m['missing'])}) for this transaction. "
+                f"{m['rationale']}"
+            ),
+            "policy_citation": m["rationale"],
+            "cited_section_id": "",
+        }
+    txn = context.get("transaction", {})
+    if txn.get("is_fleet_operation"):
+        return {
+            "decision": "approve",
+            "reasoning": "Fleet operation expense — consistent with role and category exemption.",
+            "policy_citation": "Fleet MCC exempt from pre-auth threshold",
+            "cited_section_id": "",
+        }
+    if float(txn.get("amount_cad", 0)) > 1000:
+        return {
+            "decision": "review",
+            "reasoning": (
+                f"${txn.get('amount_cad'):.0f} exceeds typical non-fleet expense — "
+                "manual review recommended."
+            ),
+            "policy_citation": "Discretionary review for high-value charges",
+            "cited_section_id": "",
+        }
+    return {
+        "decision": "approve",
+        "reasoning": "Within normal range for role and department.",
+        "policy_citation": "Within standard expense pattern",
+        "cited_section_id": "",
+    }
