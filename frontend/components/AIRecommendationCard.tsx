@@ -1,38 +1,42 @@
 "use client";
 
 import { useState } from "react";
-import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { Sparkles, ThumbsUp, ThumbsDown, CheckCircle2, AlertCircle, XOctagon } from "lucide-react";
 
 type RecType = "approve" | "review" | "deny" | "complete";
 
-const STYLES: Record<RecType, { bg: string; border: string; accent: string; title: string; titleColor: string }> = {
+const STYLES: Record<
+  RecType,
+  {
+    title: string;
+    accent: string;
+    iconBg: string;
+    icon: React.ReactNode;
+  }
+> = {
   approve: {
-    bg: "bg-green-50",
-    border: "border-green-200",
-    accent: "border-l-green-600",
-    title: "Approval recommended",
-    titleColor: "text-green-800",
+    title: "Approve",
+    accent: "text-emerald-700",
+    iconBg: "bg-emerald-50 ring-emerald-100",
+    icon: <CheckCircle2 className="w-4 h-4 text-emerald-600" strokeWidth={2.4} />,
   },
   review: {
-    bg: "bg-yellow-50",
-    border: "border-yellow-200",
-    accent: "border-l-yellow-500",
-    title: "Requires review",
-    titleColor: "text-yellow-800",
+    title: "Needs review",
+    accent: "text-amber-700",
+    iconBg: "bg-amber-50 ring-amber-100",
+    icon: <AlertCircle className="w-4 h-4 text-amber-600" strokeWidth={2.4} />,
   },
   deny: {
-    bg: "bg-red-50/30",
-    border: "border-red-200/40",
-    accent: "border-l-red-700",
-    title: "Request repayment",
-    titleColor: "text-red-900",
+    title: "Deny",
+    accent: "text-rose-700",
+    iconBg: "bg-rose-50 ring-rose-100",
+    icon: <XOctagon className="w-4 h-4 text-rose-600" strokeWidth={2.4} />,
   },
   complete: {
-    bg: "bg-slate-50",
-    border: "border-slate-200",
-    accent: "border-l-slate-400",
-    title: "Transaction complete",
-    titleColor: "text-slate-700",
+    title: "Auto-approved",
+    accent: "text-zinc-700",
+    iconBg: "bg-zinc-100 ring-zinc-200",
+    icon: <CheckCircle2 className="w-4 h-4 text-zinc-500" strokeWidth={2.4} />,
   },
 };
 
@@ -44,12 +48,14 @@ function inferType(recommendation?: string): RecType {
   return "review";
 }
 
-function parseReasoning(reasoning?: string): string[] {
-  if (!reasoning) return [];
+/**
+ * Strips a leading verdict word ("Approve.", "Deny + request repayment.")
+ * from the reasoning so we don't repeat it next to the title.
+ */
+function stripLeadingVerdict(reasoning: string): string {
   return reasoning
-    .split(/[.;]\s+/)
-    .map((s) => s.trim().replace(/^[-•]\s*/, ""))
-    .filter((s) => s.length > 5);
+    .replace(/^\s*(approve|deny|review|reject|hold|approve with [\w\s]+?|deny \+ [\w\s]+?)\.\s+/i, "")
+    .trim();
 }
 
 export default function AIRecommendationCard({
@@ -66,47 +72,71 @@ export default function AIRecommendationCard({
   const [vote, setVote] = useState<"up" | "down" | null>(null);
   const recType = explicitType ?? inferType(recommendation);
   const style = STYLES[recType];
-  const bullets = parseReasoning(reasoning);
+  const body = reasoning ? stripLeadingVerdict(reasoning) : "";
 
   return (
     <div
-      className={`${style.bg} ${style.border} ${style.accent} border border-l-[4px] rounded-xl ${
-        compact ? "px-4 py-3" : "px-5 py-4 shadow-sm"
+      className={`bg-white rounded-[20px] border border-zinc-200/70 shadow-sm ${
+        compact ? "px-4 py-3.5" : "px-5 py-5"
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start gap-4">
+        <div
+          className={`${style.iconBg} ring-1 rounded-full flex items-center justify-center flex-shrink-0 ${
+            compact ? "w-8 h-8" : "w-10 h-10"
+          }`}
+        >
+          {style.icon}
+        </div>
+
         <div className="flex-1 min-w-0">
-          <p className={`${compact ? "text-[13px]" : "text-[16px]"} font-bold tracking-tight ${style.titleColor}`}>
+          <div className="flex items-center gap-2 mb-1.5">
+            <Sparkles className="w-3 h-3 text-zinc-400" />
+            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.12em]">
+              AI recommendation
+            </span>
+          </div>
+          <p
+            className={`font-bold tracking-tight ${style.accent} leading-tight ${
+              compact ? "text-[14px]" : "text-[18px]"
+            }`}
+          >
             {style.title}
           </p>
-          {bullets.length > 0 && (
-            <ul className={`mt-3 space-y-2.5 ${compact ? "text-[12px]" : "text-[14px]"} font-medium text-zinc-600`}>
-              {bullets.slice(0, compact ? 2 : 4).map((b, i) => (
-                <li key={i} className="flex items-start gap-2.5">
-                  <span className="mt-2 flex-shrink-0 w-1 h-1 rounded-full bg-zinc-300"></span>
-                  <span className="leading-relaxed text-zinc-600">{b}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        {!compact && (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <button
-              onClick={() => setVote(vote === "up" ? null : "up")}
-              className={`p-1.5 rounded-md transition-colors ${
-                vote === "up" ? "bg-green-100 text-green-700" : "text-zinc-300 hover:text-zinc-500 hover:bg-zinc-100/50"
+          {body && (
+            <p
+              className={`mt-2.5 text-zinc-600 font-medium leading-relaxed ${
+                compact ? "text-[12.5px]" : "text-[14px]"
               }`}
             >
-              <ThumbsUp className="w-4 h-4" />
+              {body}
+            </p>
+          )}
+        </div>
+
+        {!compact && (
+          <div className="flex items-center gap-1 flex-shrink-0 -mr-1">
+            <button
+              onClick={() => setVote(vote === "up" ? null : "up")}
+              aria-label="Helpful"
+              className={`p-1.5 rounded-lg transition-colors ${
+                vote === "up"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "text-zinc-300 hover:text-zinc-500 hover:bg-zinc-50"
+              }`}
+            >
+              <ThumbsUp className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setVote(vote === "down" ? null : "down")}
-              className={`p-1.5 rounded-md transition-colors ${
-                vote === "down" ? "bg-red-100 text-red-700" : "text-zinc-300 hover:text-zinc-500 hover:bg-zinc-100/50"
+              aria-label="Not helpful"
+              className={`p-1.5 rounded-lg transition-colors ${
+                vote === "down"
+                  ? "bg-rose-50 text-rose-700"
+                  : "text-zinc-300 hover:text-zinc-500 hover:bg-zinc-50"
               }`}
             >
-              <ThumbsDown className="w-4 h-4" />
+              <ThumbsDown className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
