@@ -16,20 +16,13 @@ import {
   GitCompare,
   Zap,
   Database,
-  Code,
+  Activity,
+  Lightbulb,
+  Lock,
+  Wallet,
 } from "lucide-react";
 
-/**
- * /docs — single-page product docs.
- *
- * Layout mirrors TensorStax / Stripe / Linear docs:
- *   left rail   — sticky section nav grouped by area
- *   center      — long scrolling content with anchor IDs
- *   right rail  — "On this page" jump-to within the current section
- *
- * Built as one route with anchor IDs because a multi-route docs site is
- * overkill for this product. The sidebar is structural, not navigational.
- */
+/** /docs — single-page user guide. */
 
 type NavSection = {
   group: string;
@@ -58,9 +51,26 @@ const NAV: NavSection[] = [
   {
     group: "The policy agent",
     items: [
-      { id: "policy", label: "Policy editor", icon: Settings2 },
-      { id: "policy-chat", label: "Chat-driven edits", icon: MessageSquare },
-      { id: "policy-diff", label: "Inline diffs", icon: GitCompare },
+      { id: "agent-overview", label: "How it evaluates", icon: Sparkles },
+      { id: "agent-recs", label: "Three recommendations", icon: GitCompare },
+      { id: "activity", label: "Activity feed & audit", icon: Activity },
+    ],
+  },
+  {
+    group: "Editing the policy",
+    items: [
+      { id: "policy", label: "Inside the policy editor", icon: Settings2 },
+      { id: "policy-chat", label: "Drafting changes by chatting", icon: MessageSquare },
+      { id: "auto-approval", label: "Auto-approval rules", icon: Zap },
+      { id: "submissions", label: "Submission requirements", icon: Receipt },
+      { id: "budgets", label: "Department & employee budgets", icon: Wallet },
+      { id: "hidden-notes", label: "Hidden notes", icon: Lock },
+    ],
+  },
+  {
+    group: "Policy suggestions",
+    items: [
+      { id: "suggestions", label: "What Sift surfaces", icon: Lightbulb },
     ],
   },
   {
@@ -69,20 +79,11 @@ const NAV: NavSection[] = [
       { id: "ask-sift", label: "Ask Sift", icon: MessageSquare },
     ],
   },
-  {
-    group: "Under the hood",
-    items: [
-      { id: "architecture", label: "Architecture", icon: Code },
-      { id: "agents", label: "AI agents & tools", icon: Zap },
-      { id: "setup", label: "Run locally", icon: Database },
-    ],
-  },
 ];
 
 export default function DocsPage() {
   const [active, setActive] = useState<string>("overview");
 
-  // Scroll-spy: pick the section whose top is closest to the viewport top.
   useEffect(() => {
     const ids = NAV.flatMap((g) => g.items.map((i) => i.id));
     const onScroll = () => {
@@ -173,87 +174,91 @@ export default function DocsPage() {
 
         {/* Center content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-[820px] mx-auto px-8 lg:px-14 py-12 prose-docs">
-            <Section
-              id="overview"
-              eyebrow="Get started"
-              title="What is Sift?"
-            >
+          <div className="max-w-[820px] mx-auto px-8 lg:px-14 py-12">
+
+            {/* ─────────── GET STARTED ─────────── */}
+
+            <Section id="overview" eyebrow="Get started" title="What is Sift?">
               <p>
                 Sift is the finance team&apos;s AI co-pilot for expense
-                management. Built on the BRIM Financial fleet operations
-                dataset — 50 employees, 4,400 card transactions across six
-                months — it reviews every charge against your written policy,
-                drafts pre-approval recommendations with reasoning, lets you
-                ask questions about your spend in plain English, and groups
-                related transactions into approval-ready expense reports.
+                management. It applies your written expense policy to every
+                card transaction and produces a three-state recommendation
+                — <em>Approval recommended</em>,{" "}
+                <em>Requires review</em>, or{" "}
+                <em>Rejection recommended</em> — that the approver acts on.
               </p>
               <p>
-                Inspired by Ramp&apos;s Policy Agent, Sift goes further: the
-                agent doesn&apos;t just enforce policy — it surfaces gaps in
-                your policy, drafts the fix, and lets you accept it with one
-                click.
+                Beyond reviewing transactions, the agent surfaces gaps in
+                the policy itself, drafts the fix in conversation, and
+                lets you accept structured edits with one click. Sift
+                closes the loop from enforcement to authorship.
               </p>
-              <Figure src="/docs/shot8.png" alt="Sift welcome page" caption="The product splash — four verbs that map to four capabilities." priority />
+              <Figure
+                src="/docs/shot8.png"
+                alt="Sift welcome page"
+                caption="Four verbs that map to four capabilities — Ask, Review, Approve, Report."
+                priority
+              />
             </Section>
 
             <Section id="persona" eyebrow="Get started" title="Who Sift is for">
               <p>
                 Sift is a <strong>finance-team product</strong>, not an
-                employee app. The logged-in user is{" "}
-                <strong>Avery Chen, Finance Manager at Brim Financial</strong>.
-                Employees never log in — they submit receipts upstream in the
-                corporate-card app. Sift is what Avery opens to{" "}
-                <em>review</em> what came in.
+                employee app. The user is the approver — finance manager,
+                controller, CFO. Employees never log in to Sift; they
+                submit receipts in the corporate-card app upstream. Sift is
+                what the approver opens to <em>review</em> what came in.
               </p>
               <Callout title="Why this matters">
                 Every page is from the approver&apos;s seat. There is no
-                &quot;submit my expense&quot; flow because the manager is not
-                the submitter. The Approvals queue is her inbox; Transactions
-                is the read-mostly ledger; Reports are bundles she signs off
-                on for accounting handoff.
+                &quot;submit my expense&quot; flow because the user is not
+                the submitter. Approvals is the inbox; Transactions is the
+                read-mostly ledger; Reports are AI-grouped bundles ready
+                for sign-off and accounting handoff.
               </Callout>
             </Section>
 
             <Section id="tour" eyebrow="Get started" title="5-minute tour">
               <p>
-                Walking through Sift in five steps shows the full loop —
-                review, reason, govern.
+                The full loop in five steps — review, reason, govern.
               </p>
               <ol>
                 <li>
-                  <strong>Open the dashboard.</strong> 4,400 transactions
-                  filtered down to <strong>5 pending approvals</strong>. The
-                  AI did the filtering.
+                  <strong>Open the dashboard.</strong> Thousands of
+                  transactions filtered down to a small inbox of items
+                  that need a human decision.
                 </li>
                 <li>
-                  <strong>Open one approval.</strong> See the AI&apos;s
-                  three-state recommendation (approve / review / reject)
-                  with a citation back to the exact policy clause.
+                  <strong>Open one approval.</strong> See Sift&apos;s
+                  three-state recommendation with a citation back to the
+                  exact policy clause.
                 </li>
                 <li>
-                  <strong>Upload a receipt.</strong> Claude Vision extracts
-                  structured fields and the agent re-reasons in real time.
+                  <strong>Upload a receipt.</strong> Sift extracts the
+                  receipt&apos;s details and re-reasons about the
+                  approval in real time.
                 </li>
                 <li>
-                  <strong>Ask Sift a question.</strong> &quot;What did
-                  Operations spend on fuel last quarter?&quot; — get a chart
-                  and a summary.
+                  <strong>Ask Sift a question.</strong> Plain English in,
+                  chart and prose answer out — with conversation memory
+                  across follow-ups.
                 </li>
                 <li>
                   <strong>Edit the policy via chat.</strong> The agent
-                  drafts a structured edit; you accept or reject the inline
-                  diff.
+                  drafts a structured edit; you accept or reject the
+                  inline diff.
                 </li>
               </ol>
-              <Figure src="/docs/shot1.png" alt="Sift dashboard" caption="Dashboard — total spend, department breakdown, 90-day trend, and the inbox count." />
+              <Figure
+                src="/docs/shot1.png"
+                alt="Sift dashboard"
+                caption="Dashboard — total spend, department breakdown, 90-day trend, and the inbox count."
+              />
             </Section>
 
-            <Section
-              id="approvals"
-              eyebrow="Core workflows"
-              title="Approvals — the inbox"
-            >
+            {/* ─────────── CORE WORKFLOWS ─────────── */}
+
+            <Section id="approvals" eyebrow="Core workflows" title="Approvals — the inbox">
               <p>
                 Approvals is the daily-driver inbox. Out of thousands of card
                 charges, Sift surfaces only the ones that need a human
@@ -261,67 +266,83 @@ export default function DocsPage() {
                 employee&apos;s submission status (receipt, memo, attendees,
                 business purpose), and the policy clause being cited.
               </p>
-              <Figure src="/docs/shot3.png" alt="Approvals queue with detail panel" caption="Olivia Park's $1,972 SaaS Connect approval — Sift recommends approve with reasoning that ties together her prior conference history, Q2 budget remaining, and policy compliance." />
+              <Figure
+                src="/docs/shot3.png"
+                alt="Approvals queue with detail panel"
+                caption="Olivia Park's $1,972 SaaS Connect approval — Sift recommends approve with reasoning that ties together her prior conference history, Q2 budget remaining, and policy compliance."
+              />
               <h3>What you see in the detail panel</h3>
-              <ul>
-                <li>
-                  <strong>Pre-approval request</strong> — who, what, where,
-                  how much.
-                </li>
-                <li>
-                  <strong>Submission status badges</strong> — receipt /
-                  memo / attendees / business purpose. Green = present,
-                  amber = missing.
-                </li>
-                <li>
-                  <strong>Sift Recommendation card</strong> — three-state
-                  decision with full reasoning and a hover-citation back
-                  to the policy.
-                </li>
-                <li>
-                  <strong>Approve / Reject</strong> — one click.
-                </li>
-              </ul>
+
+              <p>
+                <strong>Submission status badges</strong> — receipt, memo,
+                attendees, business purpose. Green checkmarks mean the
+                employee submitted the field; amber means it&apos;s
+                outstanding.
+              </p>
+              <Figure
+                src="/docs/submission-badges.png"
+                alt="Four green submission badges: Receipt, Memo, Attendees, Purpose"
+                caption="The submission completeness strip at the top of every approval."
+                maxWidth={520}
+              />
+
+              <p>
+                <strong>Sift Recommendation</strong> — the three-state
+                decision with full reasoning and a hover (i) icon that
+                pulls up the exact policy clause Sift cited.
+              </p>
+              <Figure
+                src="/docs/ai-rec-card.png"
+                alt="Sift Recommendation card showing 'Approval recommended' with reasoning"
+                caption="The recommendation card. Click the (i) to see the policy citation."
+              />
+
+              <p>
+                <strong>Approve / Reject</strong> — one click. The decision
+                is logged in the activity trail with timestamp and actor.
+              </p>
               <Callout title="The hero metric">
-                <strong>5 pending out of 4,400</strong> is the proof point.
-                The AI auto-approved the in-policy lines, blocked the
-                clearly-out-of-policy ones, and surfaced only the genuinely
-                ambiguous transactions for human review.
+                Most card transactions never need a human. Sift
+                auto-approves the clearly in-policy lines, blocks the
+                clearly out-of-policy ones (blocked-MCC merchants, hard
+                threshold violations), and surfaces only the genuinely
+                ambiguous transactions for review. The inbox stays small
+                even when the underlying spend volume is large.
               </Callout>
             </Section>
 
             <Section id="ocr" eyebrow="Core workflows" title="Receipt OCR + AI re-evaluation">
               <p>
-                Drop a photo of a paper receipt onto an approval and{" "}
-                <strong>Claude Vision</strong> extracts every line — merchant,
-                address, date, line items, totals, payment method. The full
-                OCR text is stored alongside the transaction.
+                Drop a photo of a paper receipt onto any approval and
+                Sift extracts the merchant, address, date, line items,
+                totals, and payment method automatically. PNG and JPEG
+                are supported.
               </p>
+              <Figure
+                src="/docs/receipt-widget.png"
+                alt="Receipt upload widget showing an attached receipt with extracted character count"
+                caption="The receipt slot inside an approval. Once attached, Sift surfaces the extracted character count and re-runs the recommendation."
+              />
               <p>
-                More importantly: the moment a receipt is attached, the
-                policy agent re-reasons about the approval. New context
-                produces a new recommendation. If the receipt&apos;s
-                merchant or amount disagrees with the transaction on file,
-                Sift will flip the recommendation to <code>review</code> and
-                explain why.
+                The moment a receipt is attached, the agent re-reasons
+                about the approval. New context produces a new
+                recommendation. If the receipt&apos;s merchant or amount
+                disagrees with the transaction on file, the agent flips
+                the recommendation to <em>Requires review</em> and
+                explains why.
               </p>
-              <Callout title="A killer demo moment">
-                Upload a receipt for $166 to a transaction recorded as $1,450
-                and watch the AI catch the mismatch:{" "}
-                <em>
-                  &quot;The receipt presented is from Petro-Canada for $166.45,
-                  but the transaction on file is $1,450 at Flying J — the
-                  merchant name, location, and amount do not match.&quot;
-                </em>{" "}
-                That&apos;s context-aware reasoning, not pattern matching.
+              <Callout title="Sift catches mismatches">
+                Upload a $166 fuel receipt to a $1,450 transaction and
+                the agent calls it out: <em>&quot;The receipt is from
+                Petro-Canada for $166.45, but the transaction is for
+                $1,450 at Flying J — merchant, location, and amount
+                don&apos;t match.&quot;</em>{" "}
+                That&apos;s context-aware reasoning, not template
+                matching.
               </Callout>
             </Section>
 
-            <Section
-              id="transactions"
-              eyebrow="Core workflows"
-              title="Transactions — the ledger"
-            >
+            <Section id="transactions" eyebrow="Core workflows" title="Transactions — the ledger">
               <p>
                 Transactions is the company-wide read-mostly browse view. Use
                 it to investigate any charge, fill in missing context for an
@@ -329,7 +350,11 @@ export default function DocsPage() {
                 recommendation badges appear inline so the manager can scan
                 quickly.
               </p>
-              <Figure src="/docs/shot4.png" alt="Transactions page" caption="The full ledger. Approved, pending, and rejected transactions with AI-recommendation badges inline." />
+              <Figure
+                src="/docs/shot4.png"
+                alt="Transactions page"
+                caption="The full ledger. Approved, pending, and rejected transactions with AI-recommendation badges inline."
+              />
               <Callout title="How this differs from Approvals">
                 <strong>Approvals</strong> is the action queue (5 items,
                 Approve/Reject buttons).
@@ -356,15 +381,36 @@ export default function DocsPage() {
                 alt="Violations dashboard with severity counts"
                 caption="Compliance scan: 4 critical, 43 high, 49 medium violations across 96 total. Grouped by violation type with top-offender ranking on the right."
               />
-              <h3>The kind of patterns Sift catches</h3>
-              <p>
-                The most powerful violation type is <strong>split
-                transactions</strong> — multiple charges at the same merchant
-                on the same day that sum above an approval threshold. This is
-                exactly the BRIM brief example: <em>&quot;Flag an employee
-                splitting a $600 purchase into two $300 charges to duck a
-                $500 approval threshold.&quot;</em>
-              </p>
+              <h3>The patterns Sift detects</h3>
+              <ul>
+                <li>
+                  <strong>High meal / dining charge</strong> — meals over
+                  the per-person threshold without documented attendees.
+                </li>
+                <li>
+                  <strong>Personal expense on corporate card</strong> —
+                  charges at categories blocked by policy MCC rules.
+                </li>
+                <li>
+                  <strong>Luxury hotel charge</strong> — accommodation over
+                  the policy nightly cap.
+                </li>
+                <li>
+                  <strong>Duplicate charge</strong> — same merchant + same
+                  amount within a short window.
+                </li>
+                <li>
+                  <strong>Split transaction</strong> — multiple charges
+                  at the same merchant on the same day that sum above
+                  an approval threshold. Catches the classic pattern of
+                  splitting one $600 purchase into two $300 charges to
+                  duck a $500 ceiling.
+                </li>
+                <li>
+                  <strong>Alcohol without business context</strong> — bar
+                  charges where attendees and business purpose are missing.
+                </li>
+              </ul>
               <Figure
                 src="/docs/shot6.png"
                 alt="Split transaction violation example"
@@ -374,11 +420,12 @@ export default function DocsPage() {
 
             <Section id="reports" eyebrow="Core workflows" title="Expense reports — bundle sign-off">
               <p>
-                Sift bundles related transactions automatically — a trip, a
-                project, a quarter for an employee — into expense reports
-                ready for the manager&apos;s sign-off. Per the BRIM brief:{" "}
-                <em>&quot;ready for the CFO to approve alongside the expense
-                policy recommendations.&quot;</em>
+                Sift bundles related transactions automatically — a trip,
+                a project, a quarter for an employee — into expense
+                reports ready for the approver&apos;s sign-off. Each
+                report shows the AI&apos;s policy review inline so the
+                CFO can sign off on the whole bundle without re-reviewing
+                each line.
               </p>
               <Figure
                 src="/docs/shot7.png"
@@ -392,8 +439,8 @@ export default function DocsPage() {
                   accounting handoff.
                 </li>
                 <li>
-                  <strong>Reject</strong> — kick the bundle back; the AI can
-                  regenerate or the manager can ask for missing fields.
+                  <strong>Reject</strong> — kick the bundle back; the AI
+                  can regenerate or the manager can ask for missing fields.
                 </li>
                 <li>
                   <strong>Export</strong> — download a CSV with one row per
@@ -403,57 +450,172 @@ export default function DocsPage() {
                 </li>
               </ul>
               <Callout title="What &quot;Approve&quot; actually means">
-                Reports aren&apos;t authorizing card charges (those already
-                cleared). Approving a report is the CFO&apos;s seal — it
+                Reports aren&apos;t authorizing card charges — those already
+                cleared. Approving a report is the CFO&apos;s seal: it
                 acknowledges the AI&apos;s bundle and triggers the
                 downstream accounting handoff.
               </Callout>
             </Section>
 
-            <Section
-              id="policy"
-              eyebrow="The policy agent"
-              title="Policy editor — three-pane control"
-            >
+            {/* ─────────── THE POLICY AGENT ─────────── */}
+
+            <Section id="agent-overview" eyebrow="The policy agent" title="How the agent evaluates expenses">
               <p>
-                The Policy editor is the most novel surface in Sift. It treats
-                policy editing as a <strong>conversation between three
-                things</strong>:
+                Sift&apos;s policy agent evaluates each transaction using
+                multiple data sources, then produces a three-state
+                recommendation with a citation back to the exact policy
+                text it relied on:
               </p>
-              <ol>
+              <ul>
                 <li>
-                  <strong>Suggestions panel (left)</strong> — Sift proactively
-                  flags gaps, conflicts, and unintended manual-review patterns
-                  in your policy.
+                  <strong>The structured policy</strong> — the
+                  agent-facing policy document (sections, thresholds,
+                  restrictions, submission requirements, auto-approval
+                  rules, role-based caps, hidden notes).
                 </li>
                 <li>
-                  <strong>Editor (center)</strong> — tabbed: Document,
-                  Thresholds & Limits, Auto-approval rules, Submission
-                  requirements, Department budgets, Employee budgets, Source
-                  PDF.
+                  <strong>Merchant and transaction data</strong> —
+                  merchant name, MCC, amount, date/time, currency,
+                  debit/credit flag.
                 </li>
                 <li>
-                  <strong>Chat assistant (right)</strong> — drafts edits,
-                  audits disagreements, simulates changes, generates
-                  suggestions.
+                  <strong>Employee inputs</strong> — receipt OCR text,
+                  memo, business purpose, attendees, GL code.
                 </li>
-              </ol>
+                <li>
+                  <strong>Employee context</strong> — department, role,
+                  spend history, monthly budget remaining.
+                </li>
+              </ul>
+              <p>
+                Every recommendation is grounded in the policy itself
+                and links back to the exact clause it relied on. Hover
+                the (i) icon next to any recommendation to see the
+                policy text Sift cited.
+              </p>
+            </Section>
+
+            <Section id="agent-recs" eyebrow="The policy agent" title="Three recommendation types + the conservative lean">
+              <p>
+                Sift produces one of three recommendations per
+                transaction:
+              </p>
+              <ul>
+                <li>
+                  <span className="inline-block px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[12px] font-bold mr-1">
+                    Approval recommended
+                  </span>{" "}
+                  — clearly complies with policy.
+                </li>
+                <li>
+                  <span className="inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[12px] font-bold mr-1">
+                    Requires review
+                  </span>{" "}
+                  — uncertain, missing context, or the policy explicitly
+                  needs human review.
+                </li>
+                <li>
+                  <span className="inline-block px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[12px] font-bold mr-1">
+                    Rejection recommended
+                  </span>{" "}
+                  — clear policy violation.
+                </li>
+              </ul>
+              <Callout title="Sift leans conservative">
+                When policy language is ambiguous or transaction context is
+                missing, the agent does <em>not</em> guess — it returns{" "}
+                <em>Requires review</em> and explains what&apos;s missing.
+                Decisions are escalated to a human rather than risking an
+                incorrect auto-approval. Write specific policy language
+                with explicit dollar limits to get more confident decisions.
+              </Callout>
+            </Section>
+
+            <Section id="activity" eyebrow="The policy agent" title="Activity feed & audit trail">
+              <p>
+                Every consequential event is recorded and surfaced in
+                the activity feed inside each approval drawer. The feed
+                shows what the agent did, what reviewers did, and what
+                changed in the policy:
+              </p>
+              <ul>
+                <li>Agent recommendations, with the reasoning and the policy clause cited.</li>
+                <li>Auto-approvals when a rule matched without escalation.</li>
+                <li>Policy violations that the compliance scan detected.</li>
+                <li>Manager decisions — every Approve or Reject.</li>
+                <li>Policy edits — who changed what, and when.</li>
+                <li>Suggestions accepted from the policy suggestions panel.</li>
+                <li>New policy documents uploaded.</li>
+              </ul>
+              <p>
+                Every entry has a timestamp and an actor, so the feed
+                doubles as your audit trail. Reviewers, compliance, and
+                external auditors can trace any decision back to the
+                evidence that drove it.
+              </p>
               <Figure
-                src="/docs/shot9.png"
-                alt="Policy editor with suggestions, document body, inline diff, and chat assistant"
-                caption="Three panes in conversation. The chat proposed a receipt-threshold change; the editor renders the diff inline (green = added, red = removed) with Accept / Reject buttons."
+                src="/docs/activity-feed.png"
+                alt="Activity feed showing six entries — multiple Sift recommendations and an Admin submission update — each with a timestamp"
+                caption="A real activity stream from one approval. Each row shows what changed, who changed it, and when — including the agent re-reasoning after new context arrived."
               />
             </Section>
 
-            <Section
-              id="policy-chat"
-              eyebrow="The policy agent"
-              title="Chat-driven policy edits"
-            >
+            {/* ─────────── EDITING THE POLICY ─────────── */}
+
+            <Section id="policy" eyebrow="Editing the policy" title="Inside the policy editor">
               <p>
-                Type a policy change in plain English and the agent drafts a
-                structured edit. Examples:
+                The Policy editor brings together three things that
+                normally live in different tools — what your policy says,
+                where the agent sees gaps, and a conversation that lets
+                you act on both.
               </p>
+              <Figure
+                src="/docs/policy-editor-full.png"
+                alt="Policy editor showing the suggestions panel on the left, the policy body in the middle, and the assistant chat on the right"
+                caption="Suggestions on the left, the policy itself in the middle, the assistant on the right — all visible at once."
+              />
+
+              <h3>The middle is your policy</h3>
+              <p>
+                Tabs across the top let you focus on whichever part of
+                the policy you&apos;re editing — the prose document,
+                hard dollar thresholds, auto-approval rules, what
+                employees must submit per transaction type, department
+                and employee budgets, and the source PDF you originally
+                uploaded.
+              </p>
+
+              <h3>The left rail is what Sift wants to ask you</h3>
+              <p>
+                Suggestion cards surface gaps and conflicts the agent
+                noticed. Each one has a one-click Apply or Dismiss.
+              </p>
+              <Figure
+                src="/docs/suggestion-card.png"
+                alt="Single suggestion card titled 'Reasonable parking and entertainment undefined' with Apply and Dismiss buttons"
+                caption="A single suggestion card. Reads like a question Sift would ask if it could talk."
+                maxWidth={360}
+              />
+
+              <h3>The right rail is the assistant</h3>
+              <p>
+                A chat surface for drafting edits, generating more
+                suggestions, finding recurring violations, and asking
+                what would change if you ran a policy update against
+                recent transactions. Resizable — drag the handle on its
+                left edge.
+              </p>
+            </Section>
+
+            <Section id="policy-chat" eyebrow="Editing the policy" title="Drafting changes by chatting">
+              <p>
+                Type a policy change in plain English. The assistant
+                drafts the edit, keeps related rules in sync, and shows
+                you exactly what would change before anything is saved.
+                Accept or reject — there&apos;s no auto-apply.
+              </p>
+
+              <h3>Things you can say</h3>
               <pre className="bg-zinc-50 border border-zinc-200 rounded-[12px] px-4 py-3 text-[13px] font-mono text-zinc-800 leading-relaxed whitespace-pre-wrap">
 {`Change the receipt threshold to $60.
 
@@ -461,196 +623,235 @@ Add a $200 per-person cap on customer entertainment.
 
 Tighten the alcohol rule to require a guest list.
 
-Help me draft a remote work expenses section with a $500
-equipment cap and $75/month internet stipend.`}
+Help me draft a remote work expenses section with a
+$500 equipment cap and $75/month internet stipend.`}
               </pre>
+
+              <h3>The diff before you save</h3>
               <p>
-                The agent identifies the canonical structured field that owns
-                the change, updates any tightly-coupled mirrors (e.g. the
-                <code> submission_requirements</code> entry that mirrors a
-                threshold), and surfaces the proposed edit as an inline diff
-                in the editor. You accept or reject — there&apos;s no auto-
-                apply without explicit consent.
+                Every proposal renders as an inline diff in the editor.
+                Inside a paragraph, only the changed words are
+                highlighted — a single &quot;$50 → $60&quot; change does
+                not nuke the whole sentence in red. Across the policy,
+                only the fields you touched appear in the diff. Every
+                other rule stays visible and intact.
               </p>
-              <Callout title="When the agent asks vs. acts">
+              <Figure
+                src="/docs/shot9.png"
+                alt="Policy editor showing the assistant's proposed edit banner and an inline diff with green and red highlighting"
+                caption="The assistant proposed a receipt-threshold change. The diff appears inline in the editor with Accept & save / Reject buttons."
+              />
+
+              <Callout title="When the assistant asks vs. acts">
                 Sift only asks a clarifying question when the request is
                 genuinely ambiguous (e.g. &quot;raise the threshold to
                 $100&quot; without saying which threshold). Otherwise it
-                acts on safe defaults and tells you what it intentionally
-                left alone.
+                proposes the safe-default edit and tells you what it
+                intentionally left alone.
               </Callout>
             </Section>
 
-            <Section
-              id="policy-diff"
-              eyebrow="The policy agent"
-              title="Inline diffs with word-level highlighting"
-            >
+            <Section id="auto-approval" eyebrow="Editing the policy" title="Auto-approval rules">
               <p>
-                Edits surface as inline diffs scoped to the affected fields.
-                Section bodies use <strong>word-level diffs</strong> so a
-                single &quot;$50 → $60&quot; change inside a 200-word
-                paragraph highlights only the changed digits — no wall of red
-                strikethrough.
+                Auto-approval rules let you decide which transactions
+                Sift can approve on its own, without escalating to you.
+                Each rule combines conditions across:
               </p>
+              <ul>
+                <li>
+                  <strong>Amount</strong> — dollar caps, e.g. anything
+                  under $50.
+                </li>
+                <li>
+                  <strong>Merchant category</strong> — allow-lists for
+                  low-risk categories like fuel, parking, or office
+                  supplies.
+                </li>
+                <li>
+                  <strong>Department or role</strong> — scoped to
+                  specific teams or seniority levels.
+                </li>
+                <li>
+                  <strong>Submission completeness</strong> — only
+                  auto-approve when the receipt and memo are present.
+                </li>
+              </ul>
               <p>
-                Top-level dicts (thresholds, restrictions, role caps)
-                deep-merge — patching one threshold leaves all the others
-                untouched. Arrays of policy items (sections, submission
-                requirements, auto-approval rules) merge by <code>id</code>
-                — patching one section preserves all the others.
+                Rules are checked first. If a transaction qualifies, Sift
+                approves it directly and logs it in the audit trail. If
+                no rule matches, the transaction goes to the agent for
+                contextual review.
               </p>
-              <Callout title="Accept / Reject is the confirmation step">
-                The agent does not verbally re-confirm before proposing.
-                You see the diff in the editor and decide. The diff
-                visualization is the proof of trust — there&apos;s no
-                black box.
-              </Callout>
+              <Figure
+                src="/docs/auto-approval.png"
+                alt="Auto-approval rules form showing the master toggle and a 'fleet-under-500' rule"
+                caption="A real auto-approval rule. Fleet operations charges under $500 with the right MCC codes are approved without human review."
+                maxWidth={520}
+              />
             </Section>
 
-            <Section
-              id="ask-sift"
-              eyebrow="Talk to your data"
-              title="Ask Sift — natural language analytics"
-            >
+            <Section id="submissions" eyebrow="Editing the policy" title="Submission requirements">
               <p>
-                Ask Sift converts English questions into structured SQL over
-                the transaction warehouse, runs them, and answers in prose
-                with charts when relevant. The agent maintains conversation
-                state across follow-ups — ask &quot;what did Operations spend
-                on fuel?&quot; then &quot;how does that compare to
-                maintenance?&quot; without re-stating context.
+                Submission requirements define what context an employee
+                must provide for Sift to confidently evaluate a
+                transaction. Each rule has:
+              </p>
+              <ul>
+                <li>
+                  <strong>A condition</strong> that fires the rule —
+                  amount over a threshold, certain merchant categories,
+                  or specific merchant patterns.
+                </li>
+                <li>
+                  <strong>A list of required fields</strong> — receipt,
+                  memo, attendees, business purpose, GL code.
+                </li>
+                <li>
+                  <strong>A short rationale</strong> shown to both the
+                  manager and the employee when the rule applies.
+                </li>
+              </ul>
+              <p>
+                When a rule applies but a required field is missing,
+                Sift defaults to <em>Requires review</em> with a
+                citation pointing at the rule. The submission status
+                badges in the approval drawer show exactly which fields
+                are still outstanding.
+              </p>
+              <Callout title="Dynamic attendee detection">
+                A policy snippet like{" "}
+                <em>&quot;Business entertainment meals with external
+                guests must list attendee names and company
+                affiliations&quot;</em>{" "}
+                makes attendees a required field on those transactions.
+                When the receipt clarifies it&apos;s a solo charge, Sift
+                drops the requirement automatically.
+              </Callout>
+              <Figure
+                src="/docs/submission-form.png"
+                alt="Submission requirements form with three rules: receipt-over-threshold, supplier-entertainment, car-rental-parking-gasoline"
+                caption="Each requirement names the trigger condition, the fields it requires, and a short rationale that's quoted back to the manager and employee when the rule fires."
+              />
+            </Section>
+
+            <Section id="budgets" eyebrow="Editing the policy" title="Department & employee budgets">
+              <p>
+                Department and employee budgets are editable directly in
+                the policy editor:
+              </p>
+              <ul>
+                <li>
+                  <strong>Department budgets</strong> — monthly spend
+                  limits per department, with rolling-30-day utilization
+                  shown alongside each row.
+                </li>
+                <li>
+                  <strong>Employee budgets</strong> — per-person monthly
+                  caps. Sift factors remaining budget into its
+                  reasoning, e.g. <em>&quot;this conference
+                  registration brings her monthly total to $3,576.90 —
+                  within her $4,000 personal budget.&quot;</em>
+                </li>
+              </ul>
+              <Figure
+                src="/docs/dept-budgets.png"
+                alt="Department monthly caps table showing 7 departments with their last-30-day spend"
+                caption="The department budgets table. Sales has an $85,000 cap (1% used); the others run uncapped for now."
+              />
+            </Section>
+
+            <Section id="hidden-notes" eyebrow="Editing the policy" title="Hidden notes">
+              <p>
+                Each section can carry <strong>hidden notes</strong>{" "}
+                that Sift reads but the employee-facing policy does not
+                include. Useful for sensitive exceptions —
+                executive-only carve-outs, confidential ceiling
+                adjustments — or admin-only context that helps the
+                agent make better decisions without exposing it to
+                employees.
+              </p>
+              <p>
+                The editor marks hidden notes with a lock icon so their
+                visibility scope is always obvious.
+              </p>
+              <Figure
+                src="/docs/hidden-note.png"
+                alt="Business Expenses section showing the public body text and a hidden note row marked with a lock icon"
+                caption="The Business Expenses section with one hidden note. Employees never see the lock-marked row; the agent does."
+              />
+            </Section>
+
+            {/* ─────────── POLICY SUGGESTIONS ─────────── */}
+
+            <Section id="suggestions" eyebrow="Policy suggestions" title="What Sift surfaces">
+              <p>
+                Sift reviews your policy continuously and looks for
+                places where clarification would improve enforcement.
+                Suggestions appear in the left panel of the policy
+                editor with a one-click Apply or Dismiss action. Four
+                categories:
+              </p>
+              <ul>
+                <li>
+                  <strong>Needs more detail</strong> — vague terms like
+                  &quot;reasonable&quot; without a dollar cap, or rules
+                  that reference context the policy can&apos;t enforce.
+                </li>
+                <li>
+                  <strong>Conflicting rules</strong> — two parts of the
+                  policy contradict each other and could lead to
+                  inconsistent outcomes.
+                </li>
+                <li>
+                  <strong>Unintended manual reviews</strong> — language
+                  that sends a high volume of transactions to{" "}
+                  <em>Requires review</em> when it doesn&apos;t need to.
+                </li>
+                <li>
+                  <strong>Missing coverage</strong> — common scenarios
+                  the policy doesn&apos;t address, like remote work
+                  expenses, gifts, or customer entertainment.
+                </li>
+              </ul>
+              <p>
+                Suggestions are informed by your policy text and recent
+                spending patterns, so they refresh as your business
+                changes. Accepting a suggestion uses the same diff
+                preview as chat-driven edits — nothing is saved without
+                your approval.
+              </p>
+            </Section>
+
+            {/* ─────────── ASK SIFT ─────────── */}
+
+            <Section id="ask-sift" eyebrow="Talk to your data" title="Ask Sift — natural language analytics">
+              <p>
+                Ask Sift converts English questions into structured SQL
+                over the transaction warehouse, runs them, and answers in
+                prose with charts when relevant. The agent maintains
+                conversation state across follow-ups — ask{" "}
+                <em>&quot;what did Operations spend on fuel?&quot;</em>{" "}
+                then <em>&quot;how does that compare to maintenance?&quot;</em>{" "}
+                without re-stating context.
               </p>
               <Figure
                 src="/docs/shot2.png"
                 alt="Ask Sift answering a violations question with a ranked employee table"
-                caption="Plain English in, structured table out. Note how the agent breaks down the answer by severity and lists violation types per employee."
+                caption="Plain English in, structured table out. The agent breaks down the answer by severity and lists violation types per employee."
               />
               <h3>What Sift handles well</h3>
               <ul>
-                <li>Aggregations across departments, time periods, employees, categories.</li>
-                <li>Comparisons (&quot;X vs Y&quot;, &quot;over time&quot;).</li>
-                <li>Charts (bar, line, pie) auto-generated when appropriate.</li>
-                <li>Multi-step reasoning (&quot;first find X, then check Y&quot;).</li>
+                <li>Aggregations across departments, periods, employees, and categories.</li>
+                <li>Comparisons — X vs Y, over time, top N.</li>
+                <li>Charts auto-generated when the question calls for one.</li>
+                <li>Multi-step reasoning — find X, then check Y.</li>
                 <li>Conversation memory within a session.</li>
               </ul>
-            </Section>
-
-            <Section
-              id="architecture"
-              eyebrow="Under the hood"
-              title="Architecture"
-            >
-              <p>
-                Sift is a Next.js + FastAPI app backed by SQLite, with
-                Anthropic Claude as the reasoning layer.
-              </p>
-              <ul>
-                <li>
-                  <strong>Frontend</strong> — Next.js 16 (App Router) +
-                  Tailwind 4 + shadcn/ui primitives + recharts. Real-time
-                  streaming via SSE for the chat surfaces.
-                </li>
-                <li>
-                  <strong>Backend</strong> — FastAPI with persona-based
-                  agent routing (analytics persona for Ask Sift, policy
-                  editor persona for the Policy chat).
-                </li>
-                <li>
-                  <strong>Data</strong> — SQLite (~4,400 transactions over
-                  6 months). Schema includes approvals, transactions,
-                  submissions, activity events, structured policy
-                  documents, suggestions, department + employee budgets.
-                </li>
-                <li>
-                  <strong>AI</strong> — Anthropic Claude Sonnet for
-                  reasoning, Claude Vision for receipt OCR.
-                </li>
-              </ul>
-            </Section>
-
-            <Section
-              id="agents"
-              eyebrow="Under the hood"
-              title="AI agents and tools"
-            >
-              <p>
-                Two distinct agent personas share the same{" "}
-                <code>ExpenseAgent</code> framework but get different system
-                prompts and tool access:
-              </p>
-              <ul>
-                <li>
-                  <strong>analytics</strong> — Ask Sift. Tools:
-                  <code> query_transactions</code>,{" "}
-                  <code>run_sql_query</code>,{" "}
-                  <code>check_policy_compliance</code>,{" "}
-                  <code>get_approval_recommendation</code>,{" "}
-                  <code>manage_expense_reports</code>.
-                </li>
-                <li>
-                  <strong>policy_editor</strong> — Policy chat assistant.
-                  Tools:{" "}
-                  <code>manage_policy_document</code>,{" "}
-                  <code>manage_policy_suggestions</code>,{" "}
-                  <code>check_policy_compliance</code>.
-                </li>
-              </ul>
-              <p>
-                Tool calls in a single turn execute in parallel via{" "}
-                <code>asyncio.gather</code>. The chat surfaces stream tokens
-                via SSE. Tool progress is shown as discrete &quot;Pulling
-                spend data…&quot; breadcrumbs in the UI, not injected into
-                the response body.
-              </p>
-            </Section>
-
-            <Section id="setup" eyebrow="Under the hood" title="Run locally">
-              <h3>Backend</h3>
-              <pre className="bg-zinc-50 border border-zinc-200 rounded-[12px] px-4 py-3 text-[13px] font-mono text-zinc-800 leading-relaxed whitespace-pre-wrap">
-{`cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-# add your key to backend/.env
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
-
-uvicorn api.main:app --reload --port 8000`}
-              </pre>
-
-              <h3>Frontend</h3>
-              <pre className="bg-zinc-50 border border-zinc-200 rounded-[12px] px-4 py-3 text-[13px] font-mono text-zinc-800 leading-relaxed whitespace-pre-wrap">
-{`cd frontend
-npm install
-npm run dev   # runs on :3000`}
-              </pre>
-
-              <h3>Pre-seeded demo data</h3>
-              <p>
-                The repo ships with <code>brim_expenses.db</code> already
-                seeded — 50 employees, 4,400 transactions, 5 narrative pending
-                approvals, 96 violations across 4 severity levels, 4
-                AI-grouped expense reports, and a structured policy bootstrapped
-                from the original Brim PDF.
-              </p>
-
-              <Callout title="What to open first">
-                <Link href="/welcome" className="font-bold underline-offset-4 underline">
-                  /welcome
-                </Link>{" "}
-                — the splash. Then{" "}
-                <Link href="/" className="font-bold underline-offset-4 underline">
-                  /
-                </Link>{" "}
-                — the dashboard. Pending decisions live at{" "}
-                <Link href="/approvals" className="font-bold underline-offset-4 underline">
-                  /approvals
-                </Link>
-                ; the policy agent lives at{" "}
-                <Link href="/policy" className="font-bold underline-offset-4 underline">
-                  /policy
-                </Link>
-                .
+              <Callout title="Where to find it">
+                Ask Sift lives in the left sidebar. Sessions persist
+                across page reloads — your chat history is still there
+                when you come back tomorrow. Click{" "}
+                <strong>+ New chat</strong> to start fresh.
               </Callout>
             </Section>
 
@@ -714,14 +915,14 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-20 mb-16">
+    <section id={id} className="scroll-mt-20 mb-16 docs-prose">
       <p className="text-[10.5px] font-bold uppercase tracking-[0.16em] text-zinc-400 mb-2">
         {eyebrow}
       </p>
       <h2 className="text-[28px] font-bold tracking-tight text-zinc-900 leading-tight mb-5">
         {title}
       </h2>
-      <div className="text-[14.5px] text-zinc-700 leading-[1.7] font-medium">
+      <div className="text-[14.5px] text-zinc-700 leading-[1.7] font-medium space-y-4">
         {children}
       </div>
     </section>
@@ -752,14 +953,18 @@ function Figure({
   alt,
   caption,
   priority = false,
+  maxWidth,
 }: {
   src: string;
   alt: string;
   caption: string;
   priority?: boolean;
+  /** Cap the rendered width (px) for portrait / narrow crops. */
+  maxWidth?: number;
 }) {
+  const styleWrapper = maxWidth ? { maxWidth: `${maxWidth}px` } : undefined;
   return (
-    <figure className="my-7">
+    <figure className="my-7" style={styleWrapper}>
       <div className="rounded-[16px] overflow-hidden border border-zinc-200 shadow-sm bg-zinc-100">
         <Image
           src={src}
