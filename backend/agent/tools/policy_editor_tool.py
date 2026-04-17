@@ -82,12 +82,22 @@ class PolicyEditorTool(BaseTool):
             return self.err("propose_edit requires an `edit` object")
         current = policy_loader.load_structured_policy() or {}
         diff = _diff(current, params.edit)
-        merged = {**current, **params.edit}
+        # The agent loop watches for `_policy_proposal` in the result data and
+        # emits a POLICY_PROPOSAL SSE event so the /policy editor can render
+        # the diff inline with Accept / Reject buttons. The user clicks the
+        # Accept button (which calls PATCH /api/policy/document) — the chat
+        # tool itself does NOT call apply_edit.
         return self.ok(
-            f"Proposed edit touches {len(diff)} top-level field(s): {sorted(diff.keys())}. "
-            "Confirm by calling apply_edit with the same `edit` object.",
-            data=[{"current": current, "proposed": merged, "diff": diff,
-                   "edit": params.edit, "rationale": params.rationale}],
+            f"Proposed edit touches {len(diff)} top-level field(s): "
+            f"{sorted(diff.keys())}. The diff is highlighted in the editor on "
+            f"the right — click Accept to apply or Reject to discard.",
+            data=[{
+                "_policy_proposal": True,
+                "fields": sorted(diff.keys()),
+                "edit": params.edit,
+                "diff": diff,
+                "rationale": params.rationale,
+            }],
         )
 
     def _apply(self, params: InputSchema) -> ToolResult:

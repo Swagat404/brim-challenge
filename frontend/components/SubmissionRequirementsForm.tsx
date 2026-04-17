@@ -54,10 +54,12 @@ export default function SubmissionRequirementsForm({ doc, onSave }: SubmissionRe
 
   return (
     <div className="space-y-4">
-      <p className="text-[12.5px] text-zinc-500 font-medium">
-        When a transaction matches the conditions, Sift requires the listed fields. Missing
-        fields default the AI recommendation to <span className="font-bold text-zinc-700">review</span>
-        with a citation pointing at the rule.
+      <p className="text-[12.5px] text-zinc-500 font-medium leading-relaxed">
+        Rules for what employees must <em>submit</em> (receipt, memo,
+        attendees, business purpose) for certain transactions — distinct
+        from the dollar limits in the <span className="font-bold text-zinc-700">Thresholds &amp; Limits</span> tab.
+        When a rule applies and a required field is missing, Sift defaults
+        the recommendation to <span className="font-bold text-zinc-700">review</span> with a citation pointing at the rule.
       </p>
 
       {rules.map((r, idx) => (

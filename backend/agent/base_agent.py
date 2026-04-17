@@ -84,22 +84,27 @@ POLICY_EDITOR_SYSTEM_PROMPT = """You are Sift's Policy Editor assistant. You sit
 admin's policy editor and help them improve the company's expense policy
 without leaving the page.
 
-What you can do:
-1. Draft new policy sections (call manage_policy_document with action='propose_edit').
-   Confirm with the user before applying via apply_edit.
-2. Generate proactive suggestions for the policy (call manage_policy_suggestions
-   with action='generate'); list, apply, or dismiss them.
-3. Show transactions affected by the most recent policy edit
-   (manage_policy_document action='transactions_affected_by_last_edit').
-4. Find recurring policy violations to discuss patterns
-   (call check_policy_compliance).
+How you propose policy changes:
+- ALWAYS use `manage_policy_document` with action='propose_edit' to surface
+  a change. The editor on the left shows the proposed diff inline (added
+  text in green, removed in red) with Accept / Reject buttons. The human
+  clicks Accept to commit — you do NOT call action='apply_edit' yourself
+  unless the user has explicitly said "apply" or "accept" first.
+- After proposing, briefly tell the user which fields changed and why,
+  and let them decide.
 
-Style: be concise, propose concrete edits as JSON the user can approve, and
-always cite which policy section a change touches. Sift Policy Agent leans
-conservative — when in doubt, recommend `review` over `approve` and explain why.
+Other tools at your disposal:
+- `manage_policy_suggestions`: list / generate / apply / dismiss the
+  Sift policy suggestions panel on the left.
+- `manage_policy_document` action='transactions_affected_by_last_edit':
+  show approvals re-evaluated since the most recent policy_edit event.
+- `check_policy_compliance`: find recurring policy violations to discuss
+  patterns.
 
-Never invent policy text the user didn't ask for. Never reference Ramp or any
-other product by name — you are Sift.
+Style: be concise. Cite which policy section a change touches.
+Sift leans conservative — when in doubt, recommend `review` over `approve`
+and explain why. Never invent policy text the user didn't ask for.
+Never reference Ramp or any other product by name — you are Sift.
 """
 
 
@@ -234,6 +239,23 @@ class ExpenseAgent:
                 # Emit chart event separately so frontend can render it
                 if result.chart:
                     yield AgentEvent(type=EventType.CHART, chart=result.chart, tool_name=tool_name)
+
+                # Surface a pending policy edit to the /policy editor so it
+                # can render the diff inline with Accept / Reject. The
+                # policy_editor_tool's `propose_edit` marks its first data row
+                # with `_policy_proposal: True`.
+                first_row = result.data[0] if result.data else None
+                if isinstance(first_row, dict) and first_row.get("_policy_proposal"):
+                    yield AgentEvent(
+                        type=EventType.POLICY_PROPOSAL,
+                        tool_name=tool_name,
+                        proposal={
+                            "fields": first_row.get("fields", []),
+                            "edit": first_row.get("edit", {}),
+                            "diff": first_row.get("diff", {}),
+                            "rationale": first_row.get("rationale", ""),
+                        },
+                    )
 
                 yield AgentEvent(
                     type=EventType.TOOL_RESULT,

@@ -224,8 +224,16 @@ export type AgentEventType =
   | "tool_start"
   | "tool_result"
   | "chart"
+  | "policy_proposal"
   | "done"
   | "error";
+
+export interface PolicyProposal {
+  fields: string[];
+  edit: Partial<PolicyDocument>;
+  diff: Record<string, { before: unknown; after: unknown }>;
+  rationale?: string;
+}
 
 export interface AgentEvent {
   type: AgentEventType;
@@ -234,5 +242,6 @@ export interface AgentEvent {
   tool_input?: Record<string, unknown>;
   output?: string;
   chart?: ChartData;
+  proposal?: PolicyProposal;
   error?: string;
 }

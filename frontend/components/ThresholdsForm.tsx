@@ -66,25 +66,32 @@ export default function ThresholdsForm({ doc, onSave }: ThresholdsFormProps) {
 
   return (
     <div className="space-y-6">
-      <Section title="Spending Thresholds">
+      <p className="text-[12.5px] text-zinc-500 font-medium leading-relaxed">
+        Hard dollar limits and tip caps the policy enforces. These are the
+        gates Sift uses when deciding if a transaction needs human review.
+        For rules about what employees must <em>submit</em> (receipt,
+        attendees, business purpose) see the <span className="font-bold text-zinc-700">Submission Requirements</span> tab.
+      </p>
+
+      <Section title="Spending limits">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <NumberField
             label="Pre-authorization threshold"
-            sub="Expenses over this require manager approval"
+            sub="Expenses over this need approval before being reimbursed"
             value={thresholds.pre_auth ?? 0}
             onChange={(v) => setNum("pre_auth", v)}
             prefix="$"
           />
           <NumberField
             label="Receipt required above"
-            sub="Receipts must accompany any expense over this"
+            sub="A receipt must accompany any expense over this amount"
             value={thresholds.receipt_required ?? 0}
             onChange={(v) => setNum("receipt_required", v)}
             prefix="$"
           />
           <NumberField
             label="Max meal tip"
-            sub="Tips above this are not reimbursed"
+            sub="Tips above this percentage are not reimbursed"
             value={thresholds.tip_meal_max_pct ?? 0}
             onChange={(v) => setNum("tip_meal_max_pct", v)}
             suffix="%"

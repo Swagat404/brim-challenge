@@ -5,7 +5,7 @@ import {
   FileText, Sliders, Zap, Receipt, Wallet, Users, Upload, Loader2,
 } from "lucide-react";
 import { getPolicyDocument, patchPolicyDocument } from "@/lib/api";
-import type { PolicyDocument } from "@/lib/types";
+import type { PolicyDocument, PolicyProposal } from "@/lib/types";
 
 import PolicySuggestionsPanel from "@/components/PolicySuggestionsPanel";
 import PolicyDocumentEditor from "@/components/PolicyDocumentEditor";
@@ -15,6 +15,9 @@ import SubmissionRequirementsForm from "@/components/SubmissionRequirementsForm"
 import DepartmentBudgetsTable from "@/components/DepartmentBudgetsTable";
 import EmployeeBudgetsTable from "@/components/EmployeeBudgetsTable";
 import PolicyUploadModal from "@/components/PolicyUploadModal";
+import PolicyProposalBanner from "@/components/PolicyProposalBanner";
+import PolicyFieldDiff from "@/components/PolicyFieldDiff";
+import ResizableSidebar from "@/components/ResizableSidebar";
 import AgentChat from "@/components/chat/AgentChat";
 
 type TabId =
@@ -31,6 +34,18 @@ const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
   { id: "source", label: "Source PDF", icon: <Upload className="w-3.5 h-3.5" /> },
 ];
 
+// Map a top-level policy field (sections, thresholds, etc.) to the tab that
+// owns it. Used to auto-jump the editor when the chat proposes an edit so
+// the diff is visible without the user hunting for the right tab.
+const FIELD_TO_TAB: Record<string, TabId> = {
+  sections: "document",
+  thresholds: "thresholds",
+  restrictions: "thresholds",
+  approval_thresholds_by_role: "thresholds",
+  auto_approval_rules: "auto_approval",
+  submission_requirements: "submission",
+};
+
 export default function PolicyPage() {
   const [doc, setDoc] = useState<PolicyDocument | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +53,9 @@ export default function PolicyPage() {
   const [chatOpen, setChatOpen] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  // The chat-proposed edit currently awaiting Accept / Reject
+  const [proposal, setProposal] = useState<PolicyProposal | null>(null);
+  const [applying, setApplying] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -55,6 +73,38 @@ export default function PolicyPage() {
     setDoc(updated);
     setRefreshKey((k) => k + 1);
   }
+
+  // When chat proposes an edit: auto-jump to the affected tab + show the diff
+  function handleProposal(p: PolicyProposal) {
+    setProposal(p);
+    const firstField = p.fields?.[0];
+    if (firstField && FIELD_TO_TAB[firstField]) {
+      setTab(FIELD_TO_TAB[firstField]);
+    }
+  }
+
+  async function acceptProposal() {
+    if (!proposal) return;
+    setApplying(true);
+    try {
+      await savePatch(proposal.edit);
+      setProposal(null);
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  function rejectProposal() {
+    setProposal(null);
+  }
+
+  // Per-tab diff fields — only show diffs that belong to the currently-open tab
+  const tabDiffEntries = (() => {
+    if (!proposal) return [];
+    return Object.entries(proposal.diff).filter(
+      ([field]) => FIELD_TO_TAB[field] === tab
+    );
+  })();
 
   return (
     <div className="flex h-full bg-transparent">
@@ -78,7 +128,7 @@ export default function PolicyPage() {
                 {loading
                   ? "Loading…"
                   : doc
-                  ? `${doc.name} · ${doc.sections.length} sections`
+                  ? `${doc.name} · ${doc.sections.length} section${doc.sections.length === 1 ? "" : "s"}`
                   : "No policy loaded"}
               </p>
             </div>
@@ -91,20 +141,34 @@ export default function PolicyPage() {
           </div>
 
           <nav className="flex gap-1 mt-5 -mb-1 overflow-x-auto scrollbar-hide">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-[12.5px] font-bold whitespace-nowrap transition-all ${
-                  tab === t.id
-                    ? "bg-zinc-900 text-white shadow-sm"
-                    : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
-                }`}
-              >
-                {t.icon}
-                {t.label}
-              </button>
-            ))}
+            {TABS.map((t) => {
+              // Show a tiny dot on tabs that have a pending diff
+              const hasPending =
+                proposal !== null &&
+                proposal.fields.some((f) => FIELD_TO_TAB[f] === t.id);
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-[12.5px] font-bold whitespace-nowrap transition-all ${
+                    tab === t.id
+                      ? "bg-zinc-900 text-white shadow-sm"
+                      : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+                  }`}
+                >
+                  {t.icon}
+                  {t.label}
+                  {hasPending && (
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        tab === t.id ? "bg-emerald-300" : "bg-emerald-500"
+                      }`}
+                      aria-label="Pending edit"
+                    />
+                  )}
+                </button>
+              );
+            })}
           </nav>
         </header>
 
@@ -115,6 +179,30 @@ export default function PolicyPage() {
             </div>
           ) : (
             <div key={`${tab}-${refreshKey}`}>
+              {/* Pending-edit banner */}
+              {proposal && (
+                <PolicyProposalBanner
+                  proposal={proposal}
+                  applying={applying}
+                  onAccept={acceptProposal}
+                  onReject={rejectProposal}
+                />
+              )}
+
+              {/* Inline diffs for this tab's fields */}
+              {tabDiffEntries.length > 0 && (
+                <div className="space-y-3 mb-5">
+                  {tabDiffEntries.map(([field, change]) => (
+                    <PolicyFieldDiff
+                      key={field}
+                      field={field}
+                      before={change.before}
+                      after={change.after}
+                    />
+                  ))}
+                </div>
+              )}
+
               {tab === "document" && <PolicyDocumentEditor doc={doc} onSave={savePatch} />}
               {tab === "thresholds" && <ThresholdsForm doc={doc} onSave={savePatch} />}
               {tab === "auto_approval" && <AutoApprovalRulesForm doc={doc} onSave={savePatch} />}
@@ -129,15 +217,23 @@ export default function PolicyPage() {
         </div>
       </main>
 
-      {/* ───────────────── Right rail: AgentChat (policy_editor persona) ───────────────── */}
+      {/* ───────────────── Right rail: AgentChat (resizable) ───────────────── */}
       {chatOpen && (
-        <aside className="w-[360px] flex-shrink-0 border-l border-zinc-200/40 hidden xl:block">
+        <ResizableSidebar
+          handle="left"
+          defaultWidth={400}
+          minWidth={320}
+          maxWidth={720}
+          storageKey="sift_policy_chat_width"
+          className="border-l border-zinc-200/40 hidden xl:block"
+        >
           <AgentChat
             persona="policy_editor"
             layout="sidebar"
             onTurnComplete={() => { setRefreshKey((k) => k + 1); load(); }}
+            onPolicyProposal={handleProposal}
           />
-        </aside>
+        </ResizableSidebar>
       )}
 
       <PolicyUploadModal

@@ -85,6 +85,9 @@ async def chat(
                 elif event.type == EventType.CHART:
                     payload["chart"] = event.chart
                     payload["tool_name"] = event.tool_name
+                elif event.type == EventType.POLICY_PROPOSAL:
+                    payload["proposal"] = event.proposal
+                    payload["tool_name"] = event.tool_name
                 elif event.type == EventType.ERROR:
                     payload["error"] = event.error
                 elif event.type == EventType.DONE:

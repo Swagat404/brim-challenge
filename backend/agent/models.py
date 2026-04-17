@@ -51,6 +51,7 @@ class EventType(str, Enum):
     TOOL_START = "tool_start"
     TOOL_RESULT = "tool_result"
     CHART = "chart"
+    POLICY_PROPOSAL = "policy_proposal"   # tool wants the UI to surface a pending policy edit
     DONE = "done"
     ERROR = "error"
 
@@ -64,6 +65,7 @@ class AgentEvent:
     tool_input: dict[str, Any] = field(default_factory=dict)   # TOOL_START
     tool_output: str = ""                  # TOOL_RESULT
     chart: dict[str, Any] | None = None    # CHART
+    proposal: dict[str, Any] | None = None # POLICY_PROPOSAL
     error: str = ""                        # ERROR
 
 

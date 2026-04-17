@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bot, Loader2, BarChart3, ShieldAlert, FileText, Sparkles } from "lucide-react";
 import { streamChat, type ChatPersona } from "@/lib/api";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, PolicyProposal } from "@/lib/types";
 import Chart from "@/components/Chart";
 import { AIChatInput } from "@/components/ui/ai-chat-input";
 import { GenerativeArtScene } from "@/components/ui/anomalous-matter-hero";
@@ -33,6 +33,9 @@ interface AgentChatProps {
   onStreamingChange?: (streaming: boolean) => void;
   /** Called once when the agent finishes a turn (any reason). */
   onTurnComplete?: () => void;
+  /** Fired when the policy_editor agent proposes an edit. The host page
+   *  should surface a diff with Accept / Reject in the editor. */
+  onPolicyProposal?: (proposal: PolicyProposal) => void;
 }
 
 const DEFAULT_PLACEHOLDERS: Record<ChatPersona, string[]> = {
@@ -138,6 +141,7 @@ export default function AgentChat({
   sessionStorageKey,
   onStreamingChange,
   onTurnComplete,
+  onPolicyProposal,
 }: AgentChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
@@ -204,6 +208,8 @@ export default function AgentChat({
               msg.id === assistantId ? { ...msg, chart: event.chart } : msg
             )
           );
+        } else if (event.type === "policy_proposal" && event.proposal) {
+          onPolicyProposal?.(event.proposal);
         } else if (event.type === "done" || event.type === "error") {
           setMessages((m) =>
             m.map((msg) =>
