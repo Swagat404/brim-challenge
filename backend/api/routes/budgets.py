@@ -46,12 +46,36 @@ async def list_department_budgets():
         ) s ON s.department = d.department
             ORDER BY d.department"""
     )
+    import math
+
+    def _f(v) -> float:
+        if v is None:
+            return 0.0
+        try:
+            f = float(v)
+            return 0.0 if math.isnan(f) else f
+        except (TypeError, ValueError):
+            return 0.0
+
     rows = df.to_dict("records") if not df.empty else []
     for r in rows:
-        cap = float(r.get("monthly_cap") or 0)
-        spent = float(r.get("mtd_spend") or 0)
+        cap = _f(r.get("monthly_cap"))
+        spent = _f(r.get("mtd_spend"))
+        emp_count = _f(r.get("active_employees"))
+        r["monthly_cap"] = cap
+        r["mtd_spend"] = spent
+        r["active_employees"] = int(emp_count)
         r["pct_used"] = round(100 * spent / cap, 1) if cap else None
         r["has_cap"] = cap > 0
+        # Drop NaN updated_at if no cap row exists
+        if r.get("updated_at") is None or (
+            isinstance(r.get("updated_at"), float) and math.isnan(r["updated_at"])
+        ):
+            r["updated_at"] = None
+        if r.get("updated_by") is None or (
+            isinstance(r.get("updated_by"), float) and math.isnan(r["updated_by"])
+        ):
+            r["updated_by"] = None
     return {"departments": rows, "total": len(rows)}
 
 

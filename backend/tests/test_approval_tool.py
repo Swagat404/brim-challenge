@@ -117,19 +117,23 @@ def test_ai_recommend_fallback_fleet_mcc():
     policy = {"pre_auth_threshold": 50.0}
     txn = {"amount_cad": 600.0, "merchant": "Flying J", "merchant_category_code": 5541,
            "transaction_date": "2024-03-10"}
-    emp = {"name": "Marcus Rivera", "role": "Driver", "department": "Operations",
-           "monthly_budget": 5000.0}
+    # Updated for the new flow: _ask_claude is a module-level helper,
+    # and the fallback returns "approve" for fleet MCC.
+    from agent.tools import approval_tool
 
-    import pandas as pd
-    history_df = pd.DataFrame()
-    monthly_df = pd.DataFrame()
-
+    context = {
+        "transaction": {
+            "amount_cad": 100.0, "merchant": "Flying J", "mcc": 5541,
+            "is_fleet_operation": True, "date": "2024-03-10",
+        },
+        "employee": {"name": "Marcus Rivera", "role": "Driver"},
+    }
     async def run_it():
         with patch("anthropic.AsyncAnthropic") as mock_cls:
             mock_cls.return_value.messages.create = AsyncMock(
                 side_effect=RuntimeError("API down")
             )
-            return await tool._ai_recommend(txn, emp, history_df, monthly_df, policy)
+            return await approval_tool._ask_claude(context, missing=[])
 
     result = asyncio.run(run_it())
     assert result["decision"] == "approve"
@@ -137,23 +141,23 @@ def test_ai_recommend_fallback_fleet_mcc():
 
 
 def test_ai_recommend_fallback_high_amount():
-    """AI recommendation falls back to deny for high non-fleet amounts when Claude fails."""
-    from agent.tools.approval_tool import ApprovalTool
+    """Fallback for high non-fleet amounts must default to 'review' (not the
+    legacy 'deny') — Sift Policy Agent leans conservative."""
+    from agent.tools import approval_tool
 
-    tool = ApprovalTool()
-    policy = {"pre_auth_threshold": 50.0}
-    txn = {"amount_cad": 1500.0, "merchant": "Some Restaurant", "merchant_category_code": 5812,
-           "transaction_date": "2024-03-10"}
-    emp = {"name": "Bob", "role": "Manager", "department": "Finance", "monthly_budget": 5000.0}
-
-    import pandas as pd
-
+    context = {
+        "transaction": {
+            "amount_cad": 1500.0, "merchant": "Some Restaurant", "mcc": 5812,
+            "is_fleet_operation": False, "date": "2024-03-10",
+        },
+        "employee": {"name": "Bob", "role": "Manager"},
+    }
     async def run_it():
         with patch("anthropic.AsyncAnthropic") as mock_cls:
             mock_cls.return_value.messages.create = AsyncMock(
                 side_effect=RuntimeError("API down")
             )
-            return await tool._ai_recommend(txn, emp, pd.DataFrame(), pd.DataFrame(), policy)
+            return await approval_tool._ask_claude(context, missing=[])
 
     result = asyncio.run(run_it())
-    assert result["decision"] == "deny"
+    assert result["decision"] == "review"
