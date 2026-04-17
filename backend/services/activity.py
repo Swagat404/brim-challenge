@@ -96,9 +96,23 @@ def recent(limit: int = 50, *, transaction_rowid: Optional[int] = None) -> list[
                 LIMIT ?""",
             (limit,),
         )
+    import math
     rows = df.to_dict("records") if not df.empty else []
     for r in rows:
+        # pandas converts NULL ints/strings to NaN; coerce them back so the
+        # response is JSON-serializable and the frontend types are correct.
+        for key in ("transaction_rowid", "approval_id"):
+            v = r.get(key)
+            if v is None or (isinstance(v, float) and math.isnan(v)):
+                r[key] = None
+            else:
+                try:
+                    r[key] = int(v)
+                except (TypeError, ValueError):
+                    r[key] = None
         raw = r.get("metadata_json")
+        if isinstance(raw, float) and math.isnan(raw):
+            raw = None
         try:
             r["metadata"] = json.loads(raw) if raw else None
         except (TypeError, ValueError):
