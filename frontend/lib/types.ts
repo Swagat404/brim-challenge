@@ -12,6 +12,19 @@ export interface Violation {
 
 export type AiDecision = "approve" | "review" | "reject";
 
+export interface AgentStats {
+  total_transactions: number;
+  total_spend: number;
+  spend_90_days: number;
+  employee_count: number;
+  in_policy_count: number;
+  violation_count: number;
+  pending_approvals: number;
+  draft_reports: number;
+  compliance_rate: number;
+  data_window: { start: string; end: string };
+}
+
 export interface Approval {
   id: number;
   transaction_rowid: number;

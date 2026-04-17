@@ -37,19 +37,30 @@ function fmtCurrency(n: number) {
   return `$${n.toFixed(0)}`;
 }
 
-type AgentStats = {
-  total_transactions: number;
-  total_spend: number;
-  employee_count: number;
-  in_policy_count: number;
-  violation_count: number;
-  pending_approvals: number;
-  draft_reports: number;
-  compliance_rate: number;
-};
+import type { AgentStats } from "@/lib/types";
 
-function SpendTrendCard({ totalSpend }: { totalSpend: number }) {
-  // Mock trend data for the sparkline
+const MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+function fmtMonthYear(iso: string): string {
+  const m = /^(\d{4})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const [, y, mm] = m;
+  const idx = parseInt(mm, 10) - 1;
+  if (idx < 0 || idx > 11) return iso;
+  return `${MONTHS[idx]} ${y}`;
+}
+
+function fmtDataWindow(window?: { start: string; end: string }): string {
+  if (!window?.start || !window?.end) return "";
+  return `${fmtMonthYear(window.start)} – ${fmtMonthYear(window.end)}`;
+}
+
+function SpendTrendCard({ spend90: spend }: { spend90: number }) {
+  // The sparkline is decorative (we don't have a daily trend series cached
+  // yet); the headline number is the real 90-day spend from the API.
   const trendData = [
     { value: 10 }, { value: 12 }, { value: 11 }, { value: 14 },
     { value: 18 }, { value: 24 }, { value: 35 }, { value: 55 }, { value: 100 }
@@ -61,7 +72,7 @@ function SpendTrendCard({ totalSpend }: { totalSpend: number }) {
         <p className="text-[13px] font-medium text-zinc-500 mb-2">Spend last 90 days</p>
         <div className="flex items-center gap-1">
           <p className="text-[28px] font-bold text-zinc-900 tracking-tight leading-none">
-            {fmtCurrency(totalSpend)}
+            {fmtCurrency(spend)}
           </p>
           <ArrowRight className="w-5 h-5 text-zinc-400 group-hover:text-zinc-900 transition-colors ml-1" />
         </div>
@@ -116,7 +127,14 @@ export default function Dashboard() {
       <div className="mb-12 pt-4">
         <div className="flex items-center gap-2 text-zinc-400 mb-4">
           <Zap className="w-4 h-4" />
-          <span className="text-[11px] font-bold tracking-[0.2em] uppercase">Total Spend Under Management</span>
+          <span className="text-[11px] font-bold tracking-[0.2em] uppercase">
+            Total spend
+            {stats?.data_window?.start && stats?.data_window?.end && (
+              <span className="ml-2 text-zinc-500 font-medium tracking-normal normal-case">
+                · {fmtDataWindow(stats.data_window)}
+              </span>
+            )}
+          </span>
         </div>
         <div className="flex items-end gap-6 mb-10">
           <h1 className="text-[64px] font-bold tracking-tighter text-zinc-900 leading-none">
@@ -124,9 +142,9 @@ export default function Dashboard() {
           </h1>
         </div>
         
-        {/* Department Sub-stats */}
-        <div className="flex gap-12 border-b border-zinc-100 pb-8 mb-8">
-          {[...deptSpend].sort((a, b) => b.total_spend - a.total_spend).slice(0, 4).map((d, i) => (
+        {/* Department Sub-stats — same window as the headline */}
+        <div className="flex flex-wrap gap-12 border-b border-zinc-100 pb-8 mb-8">
+          {[...deptSpend].sort((a, b) => b.total_spend - a.total_spend).slice(0, 5).map((d, i) => (
             <div key={d.department} className="flex flex-col gap-1">
               <div className="flex items-center gap-2 text-zinc-900 font-bold text-[22px] tracking-tight">
                 <div className={`w-2 h-2 rounded-full ${i === 0 ? "bg-[#8b9286]" : "bg-zinc-300"}`} />
@@ -151,7 +169,7 @@ export default function Dashboard() {
 
         {/* Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <SpendTrendCard totalSpend={stats ? stats.total_spend : 0} />
+          <SpendTrendCard spend90={stats?.spend_90_days ?? 0} />
           <StatCard
             label="Active Employees"
             value={stats ? stats.employee_count.toString() : "0"}

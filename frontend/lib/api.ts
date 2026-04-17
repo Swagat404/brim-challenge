@@ -5,6 +5,7 @@ import type {
   AgentEvent,
   ActivityEvent,
   ActivityRollup,
+  AgentStats,
   PolicyDocument,
   PolicySuggestion,
   DepartmentBudget,
@@ -201,16 +202,7 @@ export async function getDepartmentSpend(): Promise<
 
 // ── Agent Stats ──────────────────────────────────────────────────────────────
 
-export async function getAgentStats(): Promise<{
-  total_transactions: number;
-  total_spend: number;
-  employee_count: number;
-  in_policy_count: number;
-  violation_count: number;
-  pending_approvals: number;
-  draft_reports: number;
-  compliance_rate: number;
-}> {
+export async function getAgentStats(): Promise<AgentStats> {
   const res = await fetch(`${BASE}/api/analytics/agent-stats`);
   if (!res.ok) throw new Error(`agent stats: ${res.status}`);
   return res.json();

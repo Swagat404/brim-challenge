@@ -33,12 +33,33 @@ async def department_spend():
 
 @router.get("/analytics/agent-stats")
 async def agent_stats():
-    """Overview stats for dashboard: total spend, txn counts, violation/approval summaries."""
+    """Overview stats for dashboard: total spend, time window, txn counts,
+    violation/approval summaries.
+
+    Returns:
+      total_spend         — all-time spend (over data_window)
+      spend_90_days       — last 90 days only (for the trend tile)
+      data_window         — {"start": ISO, "end": ISO} so the UI can label
+                            the time window of total_spend honestly.
+    """
     totals = db.query_df(
         """SELECT COUNT(*) as total_txns,
                   SUM(CASE WHEN debit_or_credit='Debit' AND transaction_code != 108 THEN amount_cad ELSE 0 END) as total_spend,
-                  COUNT(DISTINCT employee_id) as employee_count
-           FROM transactions"""
+                  COUNT(DISTINCT employee_id) as employee_count,
+                  MIN(transaction_date) as window_start,
+                  MAX(transaction_date) as window_end
+           FROM transactions
+           WHERE transaction_code != 108"""
+    )
+    spend_90 = db.query_df(
+        """SELECT COALESCE(SUM(amount_cad), 0) AS spend_90
+             FROM transactions
+            WHERE debit_or_credit = 'Debit'
+              AND transaction_code != 108
+              AND transaction_date >= date(
+                    (SELECT MAX(transaction_date) FROM transactions),
+                    '-90 days'
+                )"""
     )
     violation_count = db.query_df("SELECT COUNT(*) as cnt FROM policy_violations")
     pending_approvals = db.query_df(
@@ -56,10 +77,15 @@ async def agent_stats():
     return {
         "total_transactions": total_txns,
         "total_spend": float(t.get("total_spend", 0)),
+        "spend_90_days": float(spend_90.iloc[0]["spend_90"]) if not spend_90.empty else 0.0,
         "employee_count": int(t.get("employee_count", 0)),
         "in_policy_count": in_policy,
         "violation_count": v_count,
         "pending_approvals": int(pending_approvals.iloc[0]["cnt"]) if not pending_approvals.empty else 0,
         "draft_reports": int(draft_reports.iloc[0]["cnt"]) if not draft_reports.empty else 0,
         "compliance_rate": round(in_policy / total_txns * 100, 1) if total_txns > 0 else 100.0,
+        "data_window": {
+            "start": str(t.get("window_start") or ""),
+            "end":   str(t.get("window_end") or ""),
+        },
     }
