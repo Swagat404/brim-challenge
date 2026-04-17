@@ -32,14 +32,16 @@ UPLOAD_DIR = Path(os.path.join(ROOT, "..", "backend", "uploads", "receipts")).re
 # Tied to the approvals seeded by seed_demo_approvals.py.
 # Lookup is by (employee_id, merchant substring, amount within $1).
 SUBMISSIONS: list[dict] = [
+    # APPROVE story — receipt + purpose attached, fleet routine fuel
     {
-        "lookup": ("E042", "SAAS CONNECT", 1972.0),
-        "memo": "SaaS Connect 2026 conference registration",
-        "business_purpose": "Pipeline development with target Series-B accounts (Acme, Initech, Globex)",
-        "attendees": ["Olivia Park", "Catherine Liu — Acme", "Jake Park — Acme"],
-        "gl_code": "6420.SLS",
-        "receipt": "saas_connect_registration.png",
+        "lookup": ("E001", "FLYING J", 1450.0),
+        "memo": "DEF refill + diesel, Edmonton run",
+        "business_purpose": "Long-haul fuel for shipment SH-2218",
+        "attendees": [],
+        "gl_code": "5520.OPS",
+        "receipt": "flying_j_receipt.png",
     },
+    # APPROVE story — exec professional development, full submission
     {
         "lookup": ("E036", "ROTMAN EXEC", 1250.0),
         "memo": "Rotman Executive Education — Strategic Leadership module",
@@ -48,39 +50,34 @@ SUBMISSIONS: list[dict] = [
         "gl_code": "6700.MGT",
         "receipt": "rotman_invoice.png",
     },
+    # APPROVE story — conference, full submission with attendees
+    {
+        "lookup": ("E042", "SAAS CONNECT", 1972.0),
+        "memo": "SaaS Connect 2026 conference registration",
+        "business_purpose": "Pipeline development with target Series-B accounts (Acme, Initech, Globex)",
+        "attendees": ["Olivia Park", "Catherine Liu — Acme", "Jake Park — Acme"],
+        "gl_code": "6420.SLS",
+        "receipt": "saas_connect_registration.png",
+    },
+    # REVIEW story — meal at fine-dining without attendees / purpose / receipt.
+    # Demo flip: when the finance manager fills these in, the AI should
+    # re-decide to approve.
     {
         "lookup": ("E044", "HARBOUR 60", 445.0),
-        # Intentionally NO attendees and NO business purpose — the policy's
-        # submission_requirements rule for high-value meals will fire and
-        # the AI re-recommendation will say "review" citing the missing fields.
         "memo": "Dinner at Harbour 60",
         "business_purpose": "",
         "attendees": [],
         "gl_code": "6450.SLS",
         "receipt": None,
     },
+    # REJECT story — pharmacy on a corporate card; MCC 5912 is in the
+    # blocked list. Submission has nothing — there is no business purpose.
     {
-        "lookup": ("E001", "FLYING J", 1450.0),
-        "memo": "DEF refill + diesel, Edmonton run",
-        "business_purpose": "Long-haul fuel for shipment SH-2218",
+        "lookup": ("E006", "SHOPPERS DRUG", 758.0),
+        "memo": "",
+        "business_purpose": "",
         "attendees": [],
-        "gl_code": "5520.OPS",
-        "receipt": None,
-    },
-    {
-        "lookup": ("E025", "SNAP-ON", 895.0),
-        "memo": "Replacement torque wrench set + impact sockets",
-        "business_purpose": "Annual tool refresh for primary fleet bay",
-        "attendees": [],
-        "gl_code": "5810.MNT",
-        "receipt": None,
-    },
-    {
-        "lookup": ("E042", "EXHIBITOR SOURCE", 799.5),
-        "memo": "Booth backdrop + collateral for SaaS Connect",
-        "business_purpose": "Pre-approved trade-show materials",
-        "attendees": [],
-        "gl_code": "6420.SLS",
+        "gl_code": "",
         "receipt": None,
     },
 ]

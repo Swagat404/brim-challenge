@@ -6,42 +6,39 @@ import type { AiDecision } from "@/lib/types";
 
 const STYLES: Record<
   AiDecision,
-  {
-    label: string;
-    pillCls: string;
-    iconBg: string;
-    icon: React.ReactNode;
-  }
+  { label: string; pill: string; dot: string; iconCls: string; icon: React.ReactNode }
 > = {
   approve: {
     label: "Approval recommended",
-    pillCls: "bg-emerald-50 text-emerald-800 border-emerald-200/80",
-    iconBg: "bg-emerald-500",
-    icon: <CheckCircle2 className="w-3 h-3 text-white" strokeWidth={2.6} />,
+    pill: "bg-emerald-50/90 text-emerald-800 border-emerald-200/70",
+    dot: "bg-emerald-500",
+    iconCls: "text-emerald-600",
+    icon: <CheckCircle2 className="w-3 h-3" strokeWidth={2.4} />,
   },
   review: {
     label: "Requires review",
-    pillCls: "bg-amber-50 text-amber-800 border-amber-200/80",
-    iconBg: "bg-amber-500",
-    icon: <AlertCircle className="w-3 h-3 text-white" strokeWidth={2.6} />,
+    pill: "bg-amber-50/90 text-amber-800 border-amber-200/70",
+    dot: "bg-amber-500",
+    iconCls: "text-amber-600",
+    icon: <AlertCircle className="w-3 h-3" strokeWidth={2.4} />,
   },
   reject: {
     label: "Rejection recommended",
-    pillCls: "bg-rose-50 text-rose-800 border-rose-200/80",
-    iconBg: "bg-rose-500",
-    icon: <XOctagon className="w-3 h-3 text-white" strokeWidth={2.6} />,
+    pill: "bg-rose-50/90 text-rose-800 border-rose-200/70",
+    dot: "bg-rose-500",
+    iconCls: "text-rose-600",
+    icon: <XOctagon className="w-3 h-3" strokeWidth={2.4} />,
   },
 };
 
 export interface RecommendationBadgeProps {
   decision: AiDecision;
-  /** Short snippet of the policy text the AI cited */
   citation?: string | null;
-  /** Section ID — shown in the popover so the admin can locate it */
   sectionId?: string | null;
-  /** Render size */
+  /** "pill" = the full coloured chip; "dot" = a tiny coloured dot for dense lists */
+  variant?: "pill" | "dot";
   size?: "sm" | "md";
-  /** Hide the (i) info button (e.g. for compact list rows) */
+  /** Hide the (i) info button (useful for very dense lists) */
   hideInfo?: boolean;
 }
 
@@ -49,42 +46,47 @@ export default function RecommendationBadge({
   decision,
   citation,
   sectionId,
+  variant = "pill",
   size = "md",
   hideInfo = false,
 }: RecommendationBadgeProps) {
   const [open, setOpen] = useState(false);
   const style = STYLES[decision];
-  const showInfo = !hideInfo && Boolean(citation);
 
+  if (variant === "dot") {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5"
+        title={style.label}
+        aria-label={style.label}
+      >
+        <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
+      </span>
+    );
+  }
+
+  const showInfo = !hideInfo && Boolean(citation);
   const padding = size === "sm" ? "px-2 py-0.5" : "px-2.5 py-1";
   const text = size === "sm" ? "text-[10.5px]" : "text-[11.5px]";
 
   return (
     <span className="relative inline-flex items-center">
       <span
-        className={`inline-flex items-center gap-1.5 ${padding} rounded-full border ${style.pillCls} ${text} font-bold tracking-tight`}
+        className={`inline-flex items-center gap-1.5 ${padding} rounded-full border ${style.pill} ${text} font-semibold tracking-tight`}
       >
-        <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${style.iconBg}`}>
-          {style.icon}
-        </span>
+        <span className={style.iconCls}>{style.icon}</span>
         {style.label}
       </span>
 
       {showInfo && (
         <button
           type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setOpen((o) => !o);
-          }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}
           onMouseEnter={() => setOpen(true)}
           onMouseLeave={() => setOpen(false)}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setOpen(false)}
           aria-label="Show cited policy rule"
           aria-expanded={open}
-          className="ml-1.5 p-1 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors"
+          className="ml-1 p-0.5 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors"
         >
           <Info className="w-3.5 h-3.5" />
         </button>

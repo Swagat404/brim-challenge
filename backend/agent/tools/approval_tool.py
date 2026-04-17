@@ -252,7 +252,20 @@ async def recommend_for_transaction(
     mcc = int(txn.get("merchant_category_code") or 0) or None
     role = (employee or {}).get("role")
 
-    # 1. Auto-approval check
+    # 1. Hard-block check — restricted MCCs reject without calling Claude.
+    # These are policy-defined "never reimburse" categories (gambling,
+    # personal-use retailers like pharmacies and grocery on a corporate card,
+    # etc.). The MCC test trumps everything else: even a complete submission
+    # can't unblock a personal expense category.
+    blocked = set(
+        (structured or {}).get("restrictions", {}).get("mcc_blocked", []) or []
+    )
+    if mcc is not None and int(mcc) in {int(m) for m in blocked}:
+        return _apply_blocked_reject(
+            txn=txn, approval_id=approval_id, mcc=int(mcc), actor=actor,
+        )
+
+    # 2. Auto-approval check
     auto_cfg = (structured or {}).get("auto_approval_rules", {}) if structured else {}
     matched_rule = auto_approval.find_matching_rule(
         amount=amount, mcc=mcc, role=role,
@@ -323,6 +336,59 @@ async def recommend_for_transaction(
 
     result["auto_approved"] = False
     return result
+
+
+def _apply_blocked_reject(
+    *,
+    txn: dict,
+    approval_id: Optional[int],
+    mcc: int,
+    actor: str,
+) -> dict:
+    """Mark an approval as REJECT because the MCC is in policy.mcc_blocked.
+    Deterministic — no Claude call. The blocked-MCC test always wins over
+    any other rule because the policy decision was already made when the
+    admin added the MCC to the blocked list.
+    """
+    citation = (
+        f"Merchant category {mcc} is on the policy's restricted list "
+        "(personal-use category prohibited on the corporate card)."
+    )
+    decision = "reject"
+    reasoning = (
+        f"Reject. Merchant category {mcc} is in the policy's "
+        "blocked-MCC list, which is a hard-line restriction on the "
+        "corporate card. Recommend processing as a personal-card charge "
+        "or requesting repayment from the employee."
+    )
+
+    if approval_id is not None:
+        db.execute(
+            """UPDATE approvals
+                  SET ai_decision = ?,
+                      ai_reasoning = ?,
+                      policy_citation = ?,
+                      cited_section_id = ?
+                WHERE id = ?""",
+            (decision, reasoning, citation, "blocked_mcc", approval_id),
+        )
+
+    activity.emit(
+        "recommended",
+        f"AI rejected: MCC {mcc} is policy-restricted",
+        actor=actor,
+        transaction_rowid=int(txn["rowid"]),
+        approval_id=approval_id,
+        metadata={"decision": decision, "blocked_mcc": mcc},
+    )
+
+    return {
+        "decision": decision,
+        "reasoning": reasoning,
+        "policy_citation": citation,
+        "cited_section_id": "blocked_mcc",
+        "auto_approved": False,
+    }
 
 
 def _apply_auto_approval(
@@ -500,23 +566,45 @@ def _load_department_budget(department: str) -> Optional[dict]:
 # ── Claude prompt ────────────────────────────────────────────────────────────
 
 
-_PROMPT_TEMPLATE = """You are the policy compliance reviewer for a fleet trucking company's expense system.
+_PROMPT_TEMPLATE = """You are Sift, the policy compliance reviewer for a fleet trucking company's expense system.
 
-Read the structured context below and produce a single JSON object with the schema:
+This request IS the pre-authorization step. You decide whether to grant it
+based on the policy + the employee's submission. Don't fault the request for
+"missing prior pre-authorization" — that's what we are doing right now.
+
+Read the structured context and produce a single JSON object:
 
 {{
   "decision": "approve" | "review" | "reject",
-  "reasoning": "<one to three plain-English sentences a finance manager would read>",
+  "reasoning": "<two short sentences a finance manager would read>",
   "policy_citation": "<short snippet of the policy text or rule that drove your decision>",
-  "cited_section_id": "<the matching policy.sections[].id, or empty string if no specific section>"
+  "cited_section_id": "<the matching policy.sections[].id, or empty string>"
 }}
 
-Rules:
-- "approve" = clearly within policy and within the employee's normal pattern.
-- "review"  = ambiguous, missing required fields, or borderline budget. Lean toward review when in doubt — Sift Policy Agent is intentionally conservative.
-- "reject"  = clear policy violation (restricted MCC, personal expense on corporate card, etc.).
-- If `missing_required_fields` is non-empty, you MUST decide "review" and your `reasoning` must reference the specific missing field(s).
-- Cite a real section id from policy.sections when possible.
+Decision rules:
+
+REJECT  — clear policy violation. Examples: the merchant's MCC is in
+          policy.restrictions.mcc_blocked; the transaction is on a personal
+          card when corporate is required; restricted entertainment category
+          on a corporate card without business context.
+
+REVIEW  — required submission fields are missing OR the spend pattern is
+          unusual for the role/budget OR the transaction sits in a grey area
+          the policy doesn't clearly cover. If `missing_required_fields` is
+          non-empty you MUST decide REVIEW and name the missing field(s).
+
+APPROVE — the submission is complete (receipt + memo + any policy-required
+          fields like attendees), the merchant fits the employee's role and
+          spending pattern, the amount is within the employee's monthly
+          budget, and there is no MCC restriction or other red flag. Fleet
+          operations (fuel, tires, towing, parts) are explicitly exempt from
+          the pre-auth threshold per policy.restrictions.mcc_fleet_exempt.
+
+Important:
+- Receipts that are demo placeholders are still receipts — treat
+  `submission.has_receipt = true` as the receipt being present.
+- Cite a real section id from policy.sections whenever the rule fired
+  comes from a section.
 - Output ONLY the JSON object. No prose before or after.
 
 <context>

@@ -4,10 +4,10 @@ import { Receipt, FileText, Users, Briefcase, AlertCircle, CheckCircle2 } from "
 import type { TransactionSubmission, MissingRequirement } from "@/lib/types";
 
 const FIELD_ICONS: Record<string, React.ReactNode> = {
-  receipt:          <Receipt className="w-3 h-3" />,
-  memo:             <FileText className="w-3 h-3" />,
-  attendees:        <Users className="w-3 h-3" />,
-  business_purpose: <Briefcase className="w-3 h-3" />,
+  receipt:          <Receipt className="w-2.5 h-2.5" strokeWidth={2.4} />,
+  memo:             <FileText className="w-2.5 h-2.5" strokeWidth={2.4} />,
+  attendees:        <Users className="w-2.5 h-2.5" strokeWidth={2.4} />,
+  business_purpose: <Briefcase className="w-2.5 h-2.5" strokeWidth={2.4} />,
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -29,7 +29,7 @@ export default function SubmissionStatusBadges({
   missing,
   compact = false,
 }: SubmissionStatusBadgesProps) {
-  // Build a flat set of all missing field names
+  // Set of all currently missing-but-required fields
   const missingSet = new Set<string>();
   for (const m of missing) for (const f of m.missing) missingSet.add(f);
 
@@ -43,37 +43,48 @@ export default function SubmissionStatusBadges({
   }
 
   const allFields = ["receipt", "memo", "attendees", "business_purpose"];
-  const required = new Set<string>(missingSet);
-  // Include any field that has a value, plus any required-and-missing field
-  const visible = allFields.filter((f) => hasField(f) || required.has(f));
+  const visible = allFields.filter((f) => hasField(f) || missingSet.has(f));
 
-  if (visible.length === 0 && !compact) return null;
+  if (visible.length === 0) return null;
+
+  const padding = compact ? "px-2 py-[3px]" : "px-2.5 py-[3px]";
+  const text = compact ? "text-[10px]" : "text-[10.5px]";
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {visible.map((f) => {
         const present = hasField(f);
-        const isRequiredMissing = !present && missingSet.has(f);
+        const requiredMissing = !present && missingSet.has(f);
+
+        // Colour: present=neutral-ok, required-missing=amber, optional-empty=neutral
         const tone = present
-          ? "bg-emerald-50 text-emerald-700 border-emerald-200/80"
-          : isRequiredMissing
-          ? "bg-amber-50 text-amber-700 border-amber-200/80"
+          ? "bg-zinc-100 text-zinc-700 border-zinc-200/80"
+          : requiredMissing
+          ? "bg-amber-50 text-amber-800 border-amber-200/70"
           : "bg-zinc-50 text-zinc-500 border-zinc-200/60";
+
+        const icon = present ? (
+          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" strokeWidth={2.6} />
+        ) : requiredMissing ? (
+          <AlertCircle className="w-2.5 h-2.5 text-amber-600" strokeWidth={2.6} />
+        ) : (
+          <span className="text-zinc-400">{FIELD_ICONS[f]}</span>
+        );
+
         return (
           <span
             key={f}
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10.5px] font-bold ${tone}`}
-            title={isRequiredMissing ? "Required by policy" : present ? "Provided" : ""}
+            className={`inline-flex items-center gap-1 ${padding} rounded-full border ${tone} ${text} font-semibold tracking-tight whitespace-nowrap`}
+            title={
+              requiredMissing
+                ? `${FIELD_LABELS[f]} required by policy`
+                : present
+                ? `${FIELD_LABELS[f]} provided`
+                : FIELD_LABELS[f]
+            }
           >
-            {present ? (
-              <CheckCircle2 className="w-2.5 h-2.5" />
-            ) : isRequiredMissing ? (
-              <AlertCircle className="w-2.5 h-2.5" />
-            ) : (
-              FIELD_ICONS[f]
-            )}
+            {icon}
             {FIELD_LABELS[f]}
-            {!present && isRequiredMissing && " needed"}
           </span>
         );
       })}
