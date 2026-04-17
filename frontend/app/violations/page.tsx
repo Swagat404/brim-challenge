@@ -275,7 +275,7 @@ export default function ViolationsPage() {
                             {isOpen && (
                               <div className="px-8 pb-6 bg-zinc-50 border-t border-zinc-100/50">
                                 <div className="mt-5">
-                                  <AIRecommendationCard type="deny" reasoning={v.description} />
+                                  <AIRecommendationCard decision="reject" reasoning={v.description} />
                                 </div>
                               <div className="flex items-center justify-between mt-4">
                                 <p className="text-[12px] font-medium text-zinc-500">
@@ -355,7 +355,7 @@ export default function ViolationsPage() {
                       {isOpen && (
                         <div className="px-6 pb-5 bg-zinc-50 border-t border-zinc-100/50">
                           <div className="mt-4">
-                            <AIRecommendationCard type="deny" reasoning={v.description} />
+                            <AIRecommendationCard decision="reject" reasoning={v.description} />
                           </div>
                               <div className="flex items-center justify-between mt-4">
                                 <p className="text-[12px] font-medium text-zinc-500">

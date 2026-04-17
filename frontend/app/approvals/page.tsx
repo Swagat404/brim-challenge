@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { getApprovals, getApproval, decideApproval } from "@/lib/api";
-import type { Approval } from "@/lib/types";
+import type { Approval, AiDecision } from "@/lib/types";
 import MerchantAvatar from "@/components/MerchantAvatar";
 import AIRecommendationCard from "@/components/AIRecommendationCard";
 import PolicyReferenceModal from "@/components/PolicyReferenceModal";
@@ -115,7 +115,7 @@ function ApprovalsContent() {
   }
 
   const isFleet = selected ? FLEET_MCC.has(selected.approval.mcc ?? 0) : false;
-  const recommendationKind = inferDecisionTone(selected?.approval.ai_recommendation);
+  const recommendationKind: AiDecision | null = selected?.approval.ai_decision ?? null;
 
   return (
     <div className="flex h-full bg-transparent">
@@ -155,7 +155,7 @@ function ApprovalsContent() {
             </div>
           ) : (
             approvals.map((a) => {
-              const tone = inferDecisionTone(a.ai_recommendation);
+              const tone = a.ai_decision ?? null;
               return (
                 <button
                   key={a.id}
@@ -241,10 +241,12 @@ function ApprovalsContent() {
                 </div>
 
                 {/* ── AI recommendation ─────────────────────────────────── */}
-                {selected.approval.ai_reasoning && (
+                {selected.approval.ai_decision && selected.approval.ai_reasoning && (
                   <AIRecommendationCard
-                    recommendation={selected.approval.ai_recommendation}
+                    decision={selected.approval.ai_decision}
                     reasoning={selected.approval.ai_reasoning}
+                    citation={selected.approval.policy_citation}
+                    citedSectionId={selected.approval.cited_section_id}
                   />
                 )}
 
@@ -431,7 +433,7 @@ function ApprovalsContent() {
                   {recommendationKind && (
                     <span className="hidden sm:flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-[0.1em] mr-2">
                       <Sparkles className="w-3 h-3" />
-                      AI suggests {recommendationKind === "deny" ? "deny" : recommendationKind === "review" ? "review" : "approve"}
+                      Sift suggests {recommendationKind}
                     </span>
                   )}
                   <button
@@ -470,9 +472,9 @@ function ApprovalsContent() {
                       <XCircle className="w-4 h-4" /> Rejected
                     </div>
                   )}
-                  {selected.approval.decided_at && (
+                  {(selected.approval.decided_at || selected.approval.resolved_at) && (
                     <span className="text-zinc-500 font-medium ml-2">
-                      {relativeTime(selected.approval.decided_at)}
+                      {relativeTime(selected.approval.decided_at || selected.approval.resolved_at!)}
                     </span>
                   )}
                 </div>
@@ -492,18 +494,9 @@ function ApprovalsContent() {
   );
 }
 
-function inferDecisionTone(rec?: string): "approve" | "review" | "deny" | null {
-  if (!rec) return null;
-  const r = rec.toLowerCase();
-  if (r.includes("approve") || r.includes("accept")) return "approve";
-  if (r.includes("deny") || r.includes("reject") || r.includes("repay")) return "deny";
-  if (r.includes("review") || r.includes("flag") || r.includes("hold")) return "review";
-  return null;
-}
-
-function ToneDot({ tone }: { tone: "approve" | "review" | "deny" }) {
+function ToneDot({ tone }: { tone: AiDecision }) {
   const cls =
-    tone === "approve" ? "bg-emerald-500" : tone === "deny" ? "bg-rose-500" : "bg-amber-500";
+    tone === "approve" ? "bg-emerald-500" : tone === "reject" ? "bg-rose-500" : "bg-amber-500";
   return <span className={`w-1.5 h-1.5 rounded-full ${cls}`} />;
 }
 

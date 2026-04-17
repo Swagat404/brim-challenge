@@ -253,8 +253,7 @@ export default function ReportsPage() {
               {selected.policy_flags && selected.policy_flags.length > 0 && (
                 <div className="mb-5">
                   <AIRecommendationCard
-                    type="deny"
-                    recommendation="Policy violations detected"
+                    decision="reject"
                     reasoning={selected.policy_flags
                       .map((f) => `${f.merchant} ($${f.amount.toFixed(2)}) — ${f.flags.join("; ")}`)
                       .join(". ")}

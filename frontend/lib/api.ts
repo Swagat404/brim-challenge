@@ -1,4 +1,16 @@
-import type { Violation, Approval, Report, AgentEvent } from "./types";
+import type {
+  Violation,
+  Approval,
+  Report,
+  AgentEvent,
+  ActivityEvent,
+  ActivityRollup,
+  PolicyDocument,
+  PolicySuggestion,
+  DepartmentBudget,
+  EmployeeBudget,
+  TransactionDetail,
+} from "./types";
 
 // Empty string = same origin (Next.js rewrite proxies /api/* to FastAPI).
 // Set NEXT_PUBLIC_API_URL to override (e.g. for standalone frontend deployment).
@@ -99,14 +111,17 @@ export async function updateReportStatus(id: number, status: string): Promise<vo
 
 // ── Chat (SSE streaming) ──────────────────────────────────────────────────────
 
+export type ChatPersona = "analytics" | "policy_editor";
+
 export async function* streamChat(
   message: string,
-  sessionId: string
+  sessionId: string,
+  persona: ChatPersona = "analytics"
 ): AsyncGenerator<AgentEvent> {
-  const res = await fetch(`${BASE}/api/chat`, {
+  const res = await fetch(`${BASE}/api/chat?persona=${persona}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, session_id: sessionId }),
+    body: JSON.stringify({ message, session_id: sessionId, persona }),
   });
 
   if (!res.ok) {
@@ -198,6 +213,187 @@ export async function getAgentStats(): Promise<{
 }> {
   const res = await fetch(`${BASE}/api/analytics/agent-stats`);
   if (!res.ok) throw new Error(`agent stats: ${res.status}`);
+  return res.json();
+}
+
+// ── Activity ─────────────────────────────────────────────────────────────────
+
+export async function getActivity(params?: {
+  transaction_rowid?: number;
+  limit?: number;
+}): Promise<ActivityEvent[]> {
+  const qs = new URLSearchParams();
+  if (params?.transaction_rowid) qs.set("transaction_rowid", String(params.transaction_rowid));
+  if (params?.limit) qs.set("limit", String(params.limit));
+  const res = await fetch(`${BASE}/api/activity?${qs}`);
+  if (!res.ok) throw new Error(`activity: ${res.status}`);
+  const data = await res.json();
+  return data.events ?? [];
+}
+
+export async function getActivityRollup(window_days = 90): Promise<ActivityRollup> {
+  const res = await fetch(`${BASE}/api/activity/rollup?window_days=${window_days}`);
+  if (!res.ok) throw new Error(`activity rollup: ${res.status}`);
+  return res.json();
+}
+
+// ── Policy Document ──────────────────────────────────────────────────────────
+
+export async function getPolicyDocument(): Promise<PolicyDocument> {
+  const res = await fetch(`${BASE}/api/policy/document`);
+  if (!res.ok) throw new Error(`policy document: ${res.status}`);
+  const data = await res.json();
+  return data.document;
+}
+
+export async function patchPolicyDocument(patch: Partial<PolicyDocument>): Promise<PolicyDocument> {
+  const res = await fetch(`${BASE}/api/policy/document`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`patch policy document: ${res.status}`);
+  const data = await res.json();
+  return data.document;
+}
+
+export async function uploadPolicyPdf(file: File): Promise<{
+  proposal_id: string;
+  filename: string;
+  proposed: PolicyDocument;
+  diff: Record<string, { before: unknown; after: unknown }>;
+}> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(`${BASE}/api/policy/document/upload`, {
+    method: "POST",
+    body: fd,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`upload policy: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+export async function confirmPolicyUpload(proposal_id: string): Promise<PolicyDocument> {
+  const res = await fetch(`${BASE}/api/policy/document/upload/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ proposal_id }),
+  });
+  if (!res.ok) throw new Error(`confirm upload: ${res.status}`);
+  const data = await res.json();
+  return data.document;
+}
+
+// ── Policy Suggestions ───────────────────────────────────────────────────────
+
+export async function getPolicySuggestions(includeResolved = false): Promise<PolicySuggestion[]> {
+  const res = await fetch(`${BASE}/api/policy/suggestions?include_resolved=${includeResolved ? 1 : 0}`);
+  if (!res.ok) throw new Error(`suggestions: ${res.status}`);
+  const data = await res.json();
+  return data.suggestions ?? [];
+}
+
+export async function generatePolicySuggestions(focus?: string): Promise<PolicySuggestion[]> {
+  const qs = focus ? `?focus=${encodeURIComponent(focus)}` : "";
+  const res = await fetch(`${BASE}/api/policy/suggestions/generate${qs}`, { method: "POST" });
+  if (!res.ok) throw new Error(`generate suggestions: ${res.status}`);
+  const data = await res.json();
+  return data.suggestions ?? [];
+}
+
+export async function resolveSuggestion(id: number, action: "apply" | "dismiss"): Promise<void> {
+  const res = await fetch(`${BASE}/api/policy/suggestions/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action }),
+  });
+  if (!res.ok) throw new Error(`resolve suggestion: ${res.status}`);
+}
+
+// ── Budgets ──────────────────────────────────────────────────────────────────
+
+export async function getDepartmentBudgets(): Promise<DepartmentBudget[]> {
+  const res = await fetch(`${BASE}/api/budgets/departments`);
+  if (!res.ok) throw new Error(`dept budgets: ${res.status}`);
+  const data = await res.json();
+  return data.departments ?? [];
+}
+
+export async function setDepartmentBudget(department: string, monthly_cap: number): Promise<void> {
+  const res = await fetch(`${BASE}/api/budgets/departments/${encodeURIComponent(department)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ monthly_cap }),
+  });
+  if (!res.ok) throw new Error(`set dept budget: ${res.status}`);
+}
+
+export async function removeDepartmentBudget(department: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/budgets/departments/${encodeURIComponent(department)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`remove dept budget: ${res.status}`);
+}
+
+export async function getEmployeeBudgets(department?: string): Promise<EmployeeBudget[]> {
+  const qs = department ? `?department=${encodeURIComponent(department)}` : "";
+  const res = await fetch(`${BASE}/api/budgets/employees${qs}`);
+  if (!res.ok) throw new Error(`employee budgets: ${res.status}`);
+  const data = await res.json();
+  return data.employees ?? [];
+}
+
+export async function setEmployeeBudget(employee_id: string, monthly_budget: number): Promise<void> {
+  const res = await fetch(`${BASE}/api/budgets/employees/${encodeURIComponent(employee_id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ monthly_budget }),
+  });
+  if (!res.ok) throw new Error(`set emp budget: ${res.status}`);
+}
+
+// ── Transaction submissions ──────────────────────────────────────────────────
+
+export async function getTransactionDetail(rowid: number): Promise<TransactionDetail> {
+  const res = await fetch(`${BASE}/api/transactions/${rowid}`);
+  if (!res.ok) throw new Error(`txn ${rowid}: ${res.status}`);
+  return res.json();
+}
+
+export async function uploadReceipt(rowid: number, file: File): Promise<TransactionDetail> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(`${BASE}/api/transactions/${rowid}/receipt`, {
+    method: "POST",
+    body: fd,
+  });
+  if (!res.ok) throw new Error(`upload receipt: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteReceipt(rowid: number): Promise<void> {
+  const res = await fetch(`${BASE}/api/transactions/${rowid}/receipt`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`delete receipt: ${res.status}`);
+}
+
+export async function patchSubmission(
+  rowid: number,
+  patch: {
+    memo?: string;
+    business_purpose?: string;
+    attendees?: string[];
+    gl_code?: string;
+  }
+): Promise<TransactionDetail> {
+  const res = await fetch(`${BASE}/api/transactions/${rowid}/submission`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`patch submission: ${res.status}`);
   return res.json();
 }
 

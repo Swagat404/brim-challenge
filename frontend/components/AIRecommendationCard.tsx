@@ -1,78 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, ThumbsUp, ThumbsDown, CheckCircle2, AlertCircle, XOctagon } from "lucide-react";
-
-type RecType = "approve" | "review" | "deny" | "complete";
-
-const STYLES: Record<
-  RecType,
-  {
-    title: string;
-    accent: string;
-    iconBg: string;
-    icon: React.ReactNode;
-  }
-> = {
-  approve: {
-    title: "Approve",
-    accent: "text-emerald-700",
-    iconBg: "bg-emerald-50 ring-emerald-100",
-    icon: <CheckCircle2 className="w-4 h-4 text-emerald-600" strokeWidth={2.4} />,
-  },
-  review: {
-    title: "Needs review",
-    accent: "text-amber-700",
-    iconBg: "bg-amber-50 ring-amber-100",
-    icon: <AlertCircle className="w-4 h-4 text-amber-600" strokeWidth={2.4} />,
-  },
-  deny: {
-    title: "Deny",
-    accent: "text-rose-700",
-    iconBg: "bg-rose-50 ring-rose-100",
-    icon: <XOctagon className="w-4 h-4 text-rose-600" strokeWidth={2.4} />,
-  },
-  complete: {
-    title: "Auto-approved",
-    accent: "text-zinc-700",
-    iconBg: "bg-zinc-100 ring-zinc-200",
-    icon: <CheckCircle2 className="w-4 h-4 text-zinc-500" strokeWidth={2.4} />,
-  },
-};
-
-function inferType(recommendation?: string): RecType {
-  const r = (recommendation ?? "").toLowerCase();
-  if (r.includes("approve") || r.includes("accept")) return "approve";
-  if (r.includes("reject") || r.includes("deny") || r.includes("repay")) return "deny";
-  if (r.includes("complete") || r.includes("auto")) return "complete";
-  return "review";
-}
+import { ThumbsUp, ThumbsDown } from "lucide-react";
+import RecommendationBadge from "@/components/RecommendationBadge";
+import type { AiDecision } from "@/lib/types";
 
 /**
- * Strips a leading verdict word ("Approve.", "Deny + request repayment.")
- * from the reasoning so we don't repeat it next to the title.
+ * Sift's recommendation card.
+ *
+ * Driven entirely by the structured `decision` enum from the backend
+ * (approve | review | reject). Free-text heuristic parsing is gone — the
+ * three-state column is the source of truth.
  */
-function stripLeadingVerdict(reasoning: string): string {
-  return reasoning
-    .replace(/^\s*(approve|deny|review|reject|hold|approve with [\w\s]+?|deny \+ [\w\s]+?)\.\s+/i, "")
-    .trim();
+
+interface AIRecommendationCardProps {
+  decision: AiDecision;
+  reasoning?: string;
+  /** Cited policy snippet — drives the (i) tooltip on the badge */
+  citation?: string | null;
+  citedSectionId?: string | null;
+  /** Compact mode for embedding in narrow surfaces */
+  compact?: boolean;
 }
 
 export default function AIRecommendationCard({
-  recommendation,
+  decision,
   reasoning,
-  type: explicitType,
+  citation,
+  citedSectionId,
   compact = false,
-}: {
-  recommendation?: string;
-  reasoning?: string;
-  type?: RecType;
-  compact?: boolean;
-}) {
+}: AIRecommendationCardProps) {
   const [vote, setVote] = useState<"up" | "down" | null>(null);
-  const recType = explicitType ?? inferType(recommendation);
-  const style = STYLES[recType];
-  const body = reasoning ? stripLeadingVerdict(reasoning) : "";
 
   return (
     <div
@@ -80,36 +38,26 @@ export default function AIRecommendationCard({
         compact ? "px-4 py-3.5" : "px-5 py-5"
       }`}
     >
-      <div className="flex items-start gap-4">
-        <div
-          className={`${style.iconBg} ring-1 rounded-full flex items-center justify-center flex-shrink-0 ${
-            compact ? "w-8 h-8" : "w-10 h-10"
-          }`}
-        >
-          {style.icon}
-        </div>
-
+      <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5">
-            <Sparkles className="w-3 h-3 text-zinc-400" />
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.12em]">
-              AI recommendation
+              Sift recommendation
             </span>
+            <RecommendationBadge
+              decision={decision}
+              citation={citation}
+              sectionId={citedSectionId}
+              size={compact ? "sm" : "md"}
+            />
           </div>
-          <p
-            className={`font-bold tracking-tight ${style.accent} leading-tight ${
-              compact ? "text-[14px]" : "text-[18px]"
-            }`}
-          >
-            {style.title}
-          </p>
-          {body && (
+          {reasoning && (
             <p
-              className={`mt-2.5 text-zinc-600 font-medium leading-relaxed ${
+              className={`text-zinc-700 font-medium leading-relaxed ${
                 compact ? "text-[12.5px]" : "text-[14px]"
               }`}
             >
-              {body}
+              {reasoning}
             </p>
           )}
         </div>

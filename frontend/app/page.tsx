@@ -18,6 +18,8 @@ import { getApprovals, getViolations, getReports, getDepartmentSpend, getAgentSt
 import type { Approval, Violation } from "@/lib/types";
 import SeverityBadge from "@/components/SeverityBadge";
 import MerchantAvatar from "@/components/MerchantAvatar";
+import RecommendationBadge from "@/components/RecommendationBadge";
+import AutoApprovalBanner from "@/components/AutoApprovalBanner";
 import { Button } from "@/components/ui/button";
 import { LiquidButton } from "@/components/ui/liquid-glass-button";
 
@@ -111,7 +113,10 @@ export default function Dashboard() {
 
   return (
     <div className="p-10 max-w-7xl mx-auto space-y-10 animate-in fade-in duration-500">
-      {/* Dashboard Header - Synex Style */}
+      {/* Auto-approval rollup banner — appears only if there are recent auto-approves */}
+      <AutoApprovalBanner />
+
+      {/* Dashboard Header */}
       <div className="mb-12 pt-4">
         <div className="flex items-center gap-2 text-zinc-400 mb-4">
           <Zap className="w-4 h-4" />
@@ -219,20 +224,14 @@ export default function Dashboard() {
                       <p className="text-[14px] font-semibold text-zinc-900 truncate">
                         {a.merchant}
                       </p>
-                      {a.ai_recommendation && (
-                        <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
-                          a.ai_recommendation.toLowerCase().includes("approve")
-                            ? "bg-zinc-50 text-zinc-700 border border-zinc-200/60"
-                            : a.ai_recommendation.toLowerCase().includes("reject")
-                            ? "bg-zinc-50 text-zinc-700 border border-zinc-200/60"
-                            : "bg-zinc-50 text-zinc-700 border border-zinc-200/60"
-                        }`}>
-                          {a.ai_recommendation.toLowerCase().includes("approve")
-                            ? "Approve"
-                            : a.ai_recommendation.toLowerCase().includes("reject")
-                            ? "Deny"
-                            : "Review"}
-                        </span>
+                      {a.ai_decision && (
+                        <RecommendationBadge
+                          decision={a.ai_decision}
+                          citation={a.policy_citation}
+                          sectionId={a.cited_section_id}
+                          size="sm"
+                          hideInfo
+                        />
                       )}
                     </div>
                     <p className="text-[12px] font-medium text-zinc-500 truncate">
