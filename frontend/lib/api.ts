@@ -13,20 +13,28 @@ import type {
   TransactionDetail,
 } from "./types";
 
-// Empty string = same origin (Next.js rewrite proxies /api/* to FastAPI).
-// Set NEXT_PUBLIC_API_URL to override (e.g. for standalone frontend deployment).
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+// Empty string = same origin (Next.js dev rewrites /api/* to FastAPI).
+// Production (Railway): set NEXT_PUBLIC_API_URL to the FastAPI public URL and redeploy
+// so the client bundle includes it; otherwise fetches hit Next.js and return 404.
+const _rawBase = process.env.NEXT_PUBLIC_API_URL ?? "";
+const BASE = _rawBase.replace(/\/+$/, "");
+if (typeof window !== "undefined" && process.env.NODE_ENV === "production" && !BASE) {
+  console.warn(
+    "[Sift] NEXT_PUBLIC_API_URL is unset — API calls use this site’s origin and will 404. Add it in Railway (frontend service) and redeploy."
+  );
+}
 
 // Streaming endpoints (SSE) MUST bypass the Next.js dev rewrite proxy
 // because Next.js buffers the upstream response and flushes it in big
 // chunks, which kills the perceived streaming experience. We hit the
 // FastAPI backend directly. CORS is open for localhost:3000 in dev.
-const STREAM_BASE =
+const _rawStream =
   process.env.NEXT_PUBLIC_STREAM_API_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
   (typeof window !== "undefined" && window.location.hostname === "localhost"
     ? "http://localhost:8000"
     : "");
+const STREAM_BASE = _rawStream.replace(/\/+$/, "");
 
 // ── Violations ────────────────────────────────────────────────────────────────
 

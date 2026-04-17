@@ -12,7 +12,7 @@ interface TransactionSubmissionFormProps {
   onChange: (next: TransactionDetail) => void;
 }
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
 
 type FieldKey = "memo" | "business_purpose" | "gl_code" | "attendees";
 
