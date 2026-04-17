@@ -30,14 +30,16 @@ export default function TransactionSubmissionForm({
   const [showOcr, setShowOcr] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Re-sync local state when the detail changes (e.g. after OCR or rerun)
+  // Re-sync local state ONLY when the user opens a different transaction.
+  // Re-syncing on every sub.* change would clobber a field the user is still
+  // typing in while another field's PATCH is in flight.
   useEffect(() => {
     setMemo(sub?.memo ?? "");
     setBusinessPurpose(sub?.business_purpose ?? "");
     setGlCode(sub?.gl_code ?? "");
     setAttendees(sub?.attendees ?? []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [txnId, sub?.memo, sub?.business_purpose, sub?.gl_code, sub?.attendees?.join("|")]);
+  }, [txnId]);
 
   async function commit(field: string, patch: Parameters<typeof patchSubmission>[1]) {
     setSavingField(field);

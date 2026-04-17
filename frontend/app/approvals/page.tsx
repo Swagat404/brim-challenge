@@ -290,10 +290,23 @@ function ApprovalsContent() {
                   <TransactionSubmissionForm
                     detail={submissionDetail}
                     onChange={(next) => {
+                      // Update locally only — DON'T call selectApproval, which
+                      // would clear state and reset any in-progress edits in
+                      // other fields. The TransactionDetail response already
+                      // includes the updated approval row, so we patch the
+                      // surrounding `selected` view from it directly.
                       setSubmissionDetail(next);
                       setActivityKey((k) => k + 1);
-                      // Refresh approval since the AI may have re-decided
-                      if (next.approval?.id) selectApproval(next.approval.id);
+                      if (next.approval) {
+                        setSelected((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                approval: { ...prev.approval, ...next.approval },
+                              }
+                            : prev
+                        );
+                      }
                     }}
                   />
                 )}

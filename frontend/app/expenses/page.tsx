@@ -207,9 +207,10 @@ export default function ExpensesPage() {
             <TransactionSubmissionForm
               detail={selected}
               onChange={(next) => {
+                // Local-only update so an in-flight save in one field doesn't
+                // reset other fields the user is still editing.
                 setSelected(next);
                 setRefreshKey((k) => k + 1);
-                load();
               }}
             />
 

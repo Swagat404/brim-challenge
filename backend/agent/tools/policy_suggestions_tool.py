@@ -153,16 +153,19 @@ async def generate_suggestions(*, focus: Optional[str] = None) -> list[dict]:
         return []
 
     # Recent activity context (what's getting escalated to review?)
+    # Cap the per-row text length so a few verbose messages don't blow the
+    # prompt budget — we only need representative samples.
     recent_review_df = db.query_df(
-        """SELECT message, metadata_json FROM agent_activity
+        """SELECT substr(message, 1, 200) AS message FROM agent_activity
             WHERE action = 'recommended'
               AND occurred_at >= date('now','-30 days')
-            ORDER BY occurred_at DESC LIMIT 30"""
+            ORDER BY occurred_at DESC LIMIT 15"""
     )
     recent_violations_df = db.query_df(
-        """SELECT violation_type, severity, description FROM policy_violations
+        """SELECT violation_type, severity, substr(description, 1, 200) AS description
+             FROM policy_violations
             WHERE detected_at >= date('now','-90 days')
-            ORDER BY detected_at DESC LIMIT 30"""
+            ORDER BY detected_at DESC LIMIT 15"""
     )
 
     context = {
@@ -279,11 +282,14 @@ async def _call_claude(prompt: str) -> str:
                 max_tokens=2048,
                 messages=[{"role": "user", "content": prompt}],
             ),
-            timeout=30.0,
+            timeout=45.0,
         )
         return msg.content[0].text.strip()
     except Exception as exc:
-        logger.warning("policy_suggestions Claude call failed: %s", exc)
+        logger.warning(
+            "policy_suggestions Claude call failed (%s): %r",
+            type(exc).__name__, exc,
+        )
         return "[]"
 
 
