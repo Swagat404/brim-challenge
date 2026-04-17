@@ -926,6 +926,19 @@ function Callout({
   );
 }
 
+/** YouTube embed params: cannot remove the player chrome / watermark entirely (YouTube policy). */
+function youtubeEmbedSrc(videoId: string) {
+  const q = new URLSearchParams({
+    rel: "0",
+    modestbranding: "1",
+    iv_load_policy: "3",
+    playsinline: "1",
+    autoplay: "1",
+    mute: "1",
+  });
+  return `https://www.youtube.com/embed/${videoId}?${q.toString()}`;
+}
+
 function YouTubeEmbed({
   videoId,
   caption,
@@ -938,7 +951,7 @@ function YouTubeEmbed({
       <div className="relative w-full aspect-video rounded-[16px] overflow-hidden border border-zinc-200 shadow-sm bg-zinc-900">
         <iframe
           className="absolute inset-0 h-full w-full"
-          src={`https://www.youtube.com/embed/${videoId}?rel=0`}
+          src={youtubeEmbedSrc(videoId)}
           title="Sift product tour"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
