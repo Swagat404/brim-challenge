@@ -361,7 +361,22 @@ export default function Dashboard() {
                 <RechartsTooltip 
                   cursor={{ fill: '#f4f4f5' }}
                   contentStyle={{ borderRadius: '12px', border: '1px solid #e4e4e7', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)', padding: '12px' }}
-                  formatter={(value: number) => [`$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Spend']}
+                  formatter={(value) => {
+                    const n =
+                      typeof value === 'number'
+                        ? value
+                        : value === undefined || value === null
+                          ? NaN
+                          : Number(value);
+                    if (!Number.isFinite(n)) return ['—', 'Spend'];
+                    return [
+                      `$${n.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}`,
+                      'Spend',
+                    ];
+                  }}
                   labelStyle={{ fontWeight: 'bold', color: '#18181b', marginBottom: '4px' }}
                 />
                 <Bar dataKey="total_spend" fill="#8b9286" radius={[4, 4, 0, 0]} maxBarSize={60} />

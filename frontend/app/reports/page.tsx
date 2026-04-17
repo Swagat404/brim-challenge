@@ -411,7 +411,7 @@ export default function ReportsPage() {
                                 </div>
                               </td>
                               <td className="px-6 py-4 text-zinc-600 font-medium">
-                                {t.category_label ?? t.transaction_category ?? "---"}
+                                {String(t.category_label ?? t.transaction_category ?? "---")}
                                 {t.is_fleet && <span className="ml-2 inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold bg-zinc-100 text-zinc-700 uppercase">Fleet</span>}
                               </td>
                               <td className="px-4 py-4 text-center">
