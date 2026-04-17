@@ -35,8 +35,9 @@ DB_PATH = os.path.abspath(os.path.join(ROOT, "..", "brim_expenses.db"))
 # Each entry references a real transaction in the DB. We pick the rowid by
 # matching (employee_id, merchant, amount, date) so this is robust to reseeds.
 #
-# decision must be lowercase "approve" | "deny" | "review" — the frontend
-# AIRecommendationCard uses substring matching on those words.
+# `decision` is the three-state Sift enum: "approve" | "review" | "reject".
+# Each spec also carries a `citation` (the snippet shown in the (i) tooltip)
+# and `cited_section_id` (links into policy.sections[].id).
 
 APPROVALS_DEMO: list[dict] = [
     {
@@ -126,7 +127,7 @@ APPROVALS_DEMO: list[dict] = [
     },
     {
         "lookup": ("E006", "SHOPPERS DRUG MART", 758.0),
-        "decision": "deny",
+        "decision": "reject",
         "reasoning": (
             "Deny + request repayment. $758 at Shoppers Drug Mart (MCC 5912) "
             "is a restricted personal-expense category — no legitimate fleet "
@@ -266,6 +267,44 @@ def _ensure_synthetic_txn(
     return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
 
+def _default_citation(decision: str, reasoning: str) -> tuple[str, str]:
+    """Pick a plausible policy citation snippet + section_id from the reasoning.
+
+    These are short hand-curated mappings to sections likely produced by the
+    Claude bootstrap (business-expenses-general, business-travel,
+    corporate-credit-cards, etc.). Used only as a fallback when a spec doesn't
+    provide an explicit citation.
+    """
+    r = reasoning.lower()
+    if "fleet" in r or "fuel" in r:
+        return ("Fleet operations are exempt from the pre-auth threshold.",
+                "business-travel")
+    if "alcohol" in r:
+        return ("Alcohol is reimbursable only when dining with a customer; "
+                "guest list required.",
+                "business-travel")
+    if "personal" in r or "shoppers" in r or "drug" in r:
+        return ("Personal expenses on the corporate card are prohibited.",
+                "corporate-credit-cards")
+    if "duplicate" in r or "vendor" in r:
+        return ("Duplicate vendor charges require verification before reimbursement.",
+                "business-expenses-general")
+    if "attendee" in r or "guest" in r or "fine dining" in r or "fine-dining" in r:
+        return ("Entertainment over $200 must include attendee list and business purpose.",
+                "business-travel")
+    if "cfo" in r or "fleet" in r:
+        return ("Large fleet purchases require CFO sign-off.",
+                "business-expenses-general")
+    if decision == "approve":
+        return ("Within standard expense pattern for the role and department.",
+                "business-expenses-general")
+    if decision == "reject":
+        return ("Restricted category — not reimbursable per company policy.",
+                "business-expenses-general")
+    return ("Requires manager review for the cited reason.",
+            "business-expenses-general")
+
+
 def seed_approvals(conn: sqlite3.Connection) -> None:
     cur = conn.cursor()
     print("Wiping pending approvals…")
@@ -279,7 +318,6 @@ def seed_approvals(conn: sqlite3.Connection) -> None:
             print(f"  · synth txn → {emp_id} / {merchant} / ${amount}")
             rowid = _ensure_synthetic_txn(conn, emp_id, merchant, amount, spec["days_ago"])
 
-        # Get the canonical merchant name and date for the approval row
         txn = cur.execute(
             "SELECT merchant_info_dba_name, transaction_date, merchant_category_code FROM transactions WHERE rowid = ?",
             (rowid,),
@@ -287,16 +325,24 @@ def seed_approvals(conn: sqlite3.Connection) -> None:
         merchant_name = txn[0]
         requested_at = (datetime.utcnow() - timedelta(days=spec["days_ago"])).isoformat()
 
+        citation, section_id = spec.get("citation"), spec.get("cited_section_id")
+        if not citation or not section_id:
+            d_cit, d_sec = _default_citation(spec["decision"], spec["reasoning"])
+            citation = citation or d_cit
+            section_id = section_id or d_sec
+
         cur.execute(
             """INSERT INTO approvals
                (transaction_rowid, employee_id, amount, merchant, status,
-                ai_recommendation, ai_reasoning, requested_at)
-               VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)""",
+                ai_decision, ai_reasoning, policy_citation, cited_section_id,
+                requested_at)
+               VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)""",
             (rowid, emp_id, amount, merchant_name,
-             spec["decision"], spec["reasoning"], requested_at),
+             spec["decision"], spec["reasoning"], citation, section_id,
+             requested_at),
         )
         seeded += 1
-    print(f"Seeded {seeded} pending approvals with AI recommendations.")
+    print(f"Seeded {seeded} pending approvals with three-state recommendations + citations.")
 
 
 def seed_reports(conn: sqlite3.Connection) -> None:
