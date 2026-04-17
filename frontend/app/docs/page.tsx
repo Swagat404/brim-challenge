@@ -178,9 +178,8 @@ export default function DocsPage() {
             {/* ─────────── GET STARTED ─────────── */}
 
             <Section id="overview" eyebrow="Get started" title="What is Sift?">
-              <Video
-                src="/docs/siftdemo.mp4"
-                poster="/docs/shot1.png"
+              <YouTubeEmbed
+                videoId="lHxs2WK6z0A"
                 caption="Quick tour: Sift in action — policy-aware recommendations, dashboard, and workflows."
               />
               <p>
@@ -924,6 +923,31 @@ function Callout({
         {children}
       </div>
     </div>
+  );
+}
+
+function YouTubeEmbed({
+  videoId,
+  caption,
+}: {
+  videoId: string;
+  caption: string;
+}) {
+  return (
+    <figure className="my-7">
+      <div className="relative w-full aspect-video rounded-[16px] overflow-hidden border border-zinc-200 shadow-sm bg-zinc-900">
+        <iframe
+          className="absolute inset-0 h-full w-full"
+          src={`https://www.youtube.com/embed/${videoId}?rel=0`}
+          title="Sift product tour"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
+      </div>
+      <figcaption className="text-[12.5px] text-zinc-500 mt-2.5 leading-relaxed font-medium">
+        {caption}
+      </figcaption>
+    </figure>
   );
 }
 
