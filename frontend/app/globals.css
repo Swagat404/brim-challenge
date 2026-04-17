@@ -144,6 +144,98 @@ body {
 @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
 .cursor-blink { animation: blink 1s step-end infinite; }
 
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.thinking-pulse { animation: thinking-pulse 1.6s ease-in-out infinite; }
+
+/* ── 3D box loader (components/ui/box-loader.tsx) ──────────────────────── */
+.boxes {
+  --size: 12px;
+  --duration: 1100ms;
+  height: calc(var(--size) * 2);
+  width: calc(var(--size) * 3);
+  position: relative;
+  transform-style: preserve-3d;
+  transform-origin: 50% 50%;
+  transform: rotateX(60deg) rotateZ(45deg) rotateY(0deg) translateZ(0);
+}
+.boxes .box {
+  width: var(--size);
+  height: var(--size);
+  top: 0;
+  left: 0;
+  position: absolute;
+  transform-style: preserve-3d;
+}
+.boxes .box.box-1 {
+  transform: translate(100%, 0);
+  animation: box1 var(--duration) linear infinite;
+}
+.boxes .box.box-2 {
+  transform: translate(0, 100%);
+  animation: box2 var(--duration) linear infinite;
+}
+.boxes .box.box-3 {
+  transform: translate(100%, 100%);
+  animation: box3 var(--duration) linear infinite;
+}
+.boxes .box.box-4 {
+  transform: translate(200%, 0);
+  animation: box4 var(--duration) linear infinite;
+}
+.boxes .box > div {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: var(--face-bg, #18181b);
+  top: var(--face-top, auto);
+  right: var(--face-right, auto);
+  bottom: var(--face-bottom, auto);
+  left: var(--face-left, auto);
+  transform: rotateY(var(--face-ry, 0deg)) rotateX(var(--face-rx, 0deg))
+    translateZ(var(--face-tz, calc(var(--size) / 2)));
+}
+.boxes .box .face-front {
+  --face-bg: #27272a; /* zinc-800 */
+}
+.boxes .box .face-right {
+  --face-bg: #18181b; /* zinc-900 */
+  --face-right: 0;
+  --face-ry: 90deg;
+}
+.boxes .box .face-top {
+  --face-bg: #3f3f46; /* zinc-700 */
+  --face-top: 0;
+  --face-rx: -90deg;
+}
+.boxes .box .face-back {
+  --face-bg: rgba(63, 63, 70, 0.4); /* zinc-700 / 40 */
+  --face-top: 0;
+  --face-left: 0;
+  --face-ry: 180deg;
+}
+
+@keyframes box1 {
+  0%, 50% { transform: translate(100%, 0); }
+  100% { transform: translate(200%, 0); }
+}
+@keyframes box2 {
+  0% { transform: translate(0, 100%); }
+  50% { transform: translate(0, 0); }
+  100% { transform: translate(100%, 0); }
+}
+@keyframes box3 {
+  0%, 50% { transform: translate(100%, 100%); }
+  100% { transform: translate(0, 100%); }
+}
+@keyframes box4 {
+  0% { transform: translate(200%, 0); }
+  50% { transform: translate(200%, 100%); }
+  100% { transform: translate(100%, 100%); }
+}
+
 /* Interactive elements */
 button, [role="button"], summary { cursor: pointer; }
 button:focus-visible, a:focus-visible, [role="button"]:focus-visible, input:focus-visible {

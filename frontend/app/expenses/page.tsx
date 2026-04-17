@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Filter, X, Receipt, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { Loader2, Filter, X, Receipt, ChevronRight, ArrowUpRight } from "lucide-react";
 import {
   getApprovals,
   getTransactionDetail,
@@ -19,14 +20,13 @@ import AIRecommendationCard from "@/components/AIRecommendationCard";
 import ActivityFeed from "@/components/ActivityFeed";
 
 /**
- * /expenses — Sift's transaction-level view.
+ * /transactions — Sift's company-wide transaction browser.
  *
- * Lists all approvals (which back a transaction) so an employee can browse
- * what they've spent and fill in submission details (receipt, memo, attendees,
- * business purpose, GL code) per row.
- *
- * Picking a row opens a side drawer that mounts <TransactionSubmissionForm>
- * + the AI recommendation if there's one + the per-transaction activity feed.
+ * Sift is a finance-team product. This page is the manager's view into
+ * every card transaction across the org, with the AI's recommendation,
+ * what the employee submitted (receipt, memo, attendees), and the audit
+ * trail. Editing the submission is admin-corrective — the manager can
+ * fill in what an employee forgot — but the primary mode is review.
  */
 export default function ExpensesPage() {
   const [rows, setRows] = useState<Approval[]>([]);
@@ -78,11 +78,8 @@ export default function ExpensesPage() {
       <div className="flex-1 overflow-hidden flex flex-col min-w-0">
         <header className="px-8 py-6 border-b border-zinc-100 bg-white/70 backdrop-blur-xl flex-shrink-0">
           <h1 className="text-[24px] font-bold tracking-tight text-zinc-900 leading-none mb-1.5">
-            My expenses
+            Transactions
           </h1>
-          <p className="text-[13px] font-medium text-zinc-500">
-            Submit receipts, memos, and attendees so Sift can finish reviewing.
-          </p>
 
           <div className="flex items-center gap-2 mt-5 flex-wrap">
             <div className="flex items-center bg-zinc-100/80 p-1 rounded-full">
@@ -192,15 +189,27 @@ export default function ExpensesPage() {
               missing={selected.missing_required_fields}
             />
 
-            {/* AI recommendation */}
+            {/* AI recommendation (read-only on this page — decisions live
+                in /approvals so the queue stays the single source of truth) */}
             {selected.approval?.ai_decision && selected.approval?.ai_reasoning && (
-              <AIRecommendationCard
-                decision={selected.approval.ai_decision}
-                reasoning={selected.approval.ai_reasoning}
-                citation={selected.approval.policy_citation}
-                citedSectionId={selected.approval.cited_section_id}
-                compact
-              />
+              <div className="space-y-2">
+                <AIRecommendationCard
+                  decision={selected.approval.ai_decision}
+                  reasoning={selected.approval.ai_reasoning}
+                  citation={selected.approval.policy_citation}
+                  citedSectionId={selected.approval.cited_section_id}
+                  compact
+                />
+                {selected.approval.status === "pending" && (
+                  <Link
+                    href="/approvals"
+                    className="flex items-center justify-between gap-2 px-4 py-2.5 rounded-[12px] bg-zinc-900 hover:bg-black text-white text-[12.5px] font-bold transition-all"
+                  >
+                    <span>Decide this in Approvals</span>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </Link>
+                )}
+              </div>
             )}
 
             {/* Submission form */}

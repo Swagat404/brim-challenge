@@ -17,6 +17,17 @@ import type {
 // Set NEXT_PUBLIC_API_URL to override (e.g. for standalone frontend deployment).
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+// Streaming endpoints (SSE) MUST bypass the Next.js dev rewrite proxy
+// because Next.js buffers the upstream response and flushes it in big
+// chunks, which kills the perceived streaming experience. We hit the
+// FastAPI backend directly. CORS is open for localhost:3000 in dev.
+const STREAM_BASE =
+  process.env.NEXT_PUBLIC_STREAM_API_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  (typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8000"
+    : "");
+
 // ── Violations ────────────────────────────────────────────────────────────────
 
 export async function getViolations(params?: {
@@ -119,9 +130,12 @@ export async function* streamChat(
   sessionId: string,
   persona: ChatPersona = "analytics"
 ): AsyncGenerator<AgentEvent> {
-  const res = await fetch(`${BASE}/api/chat?persona=${persona}`, {
+  const res = await fetch(`${STREAM_BASE}/api/chat?persona=${persona}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
     body: JSON.stringify({ message, session_id: sessionId, persona }),
   });
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -11,7 +12,6 @@ import {
   FileText,
   Shield,
   Receipt,
-  Zap,
 } from "lucide-react";
 import { getAgentStats } from "@/lib/api";
 import {
@@ -29,7 +29,7 @@ const navItems = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard, badgeKey: null },
   { label: "Ask Sift", href: "/chat", icon: MessageSquare, badgeKey: null },
   { label: "Approvals", href: "/approvals", icon: CheckCircle, badgeKey: "pending_approvals" as const },
-  { label: "Expenses", href: "/expenses", icon: Receipt, badgeKey: null },
+  { label: "Transactions", href: "/expenses", icon: Receipt, badgeKey: null },
   { label: "Violations", href: "/violations", icon: ShieldAlert, badgeKey: "violation_count" as const },
   { label: "Policy", href: "/policy", icon: Shield, badgeKey: null },
   { label: "Reports", href: "/reports", icon: FileText, badgeKey: "draft_reports" as const },
@@ -60,10 +60,15 @@ export default function Sidebar() {
   return (
     <BaseSidebar collapsible="none">
       <SidebarHeader className="px-8 py-8">
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 bg-white rounded-full flex items-center justify-center">
-            <Zap className="w-3.5 h-3.5 text-black" fill="currentColor" />
-          </div>
+        <div className="flex items-center gap-2">
+          <Image
+            src="/sift-logo.png"
+            alt="Sift"
+            width={40}
+            height={40}
+            priority
+            className="w-10 h-10 object-contain -ml-1.5"
+          />
           <span className="font-bold text-[18px] tracking-tight text-white">
             sift
           </span>
@@ -103,11 +108,11 @@ export default function Sidebar() {
       <SidebarFooter className="px-8 py-8 mt-auto">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-[#8b9286] flex items-center justify-center text-white text-xs font-bold">
-            N
+            A
           </div>
           <div>
-            <p className="text-[12px] text-white font-medium">Fleet Operations</p>
-            <p className="text-[11px] text-zinc-500">Brim Financial &copy; 2025</p>
+            <p className="text-[12px] text-white font-medium">Avery Chen</p>
+            <p className="text-[11px] text-zinc-500">Finance Manager</p>
           </div>
         </div>
       </SidebarFooter>

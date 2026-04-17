@@ -57,3 +57,5 @@ Thumbs.db
 # Unused module
 policy-enforcer/
 *.png
+# but always ship product assets shipped with the frontend (logo, docs screenshots, etc.)
+!frontend/public/**/*.png

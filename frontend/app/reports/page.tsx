@@ -8,8 +8,9 @@ import {
   CheckCircle,
   Clock,
   XCircle,
-  Send,
   Eye,
+  Download,
+  ShieldAlert,
 } from "lucide-react";
 import {
   PieChart,
@@ -22,15 +23,21 @@ import { getReports, getReport, updateReportStatus } from "@/lib/api";
 import type { Report } from "@/lib/types";
 import MerchantAvatar from "@/components/MerchantAvatar";
 import PolicyBadge, { inferPolicyStatus } from "@/components/PolicyBadge";
-import AIRecommendationCard from "@/components/AIRecommendationCard";
+
+const ShieldAlertIcon = () => (
+  <ShieldAlert className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+);
 
 const PIE_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4", "#ec4899", "#f97316"];
 
+// In Sift, the user IS the approving manager. Both "draft" (AI-prepped)
+// and "submitted" (queued for review) mean the same thing from the
+// manager's seat: this report is waiting for them to decide.
 const STATUS_CFG: Record<string, { icon: React.ReactNode; cls: string; label: string }> = {
-  draft: { icon: <Clock className="w-3 h-3" />, cls: "text-zinc-600 bg-zinc-100 border-zinc-200/60", label: "Draft" },
-  submitted: { icon: <Send className="w-3 h-3" />, cls: "text-zinc-600 bg-zinc-50 border-zinc-200/60", label: "Submitted" },
-  approved: { icon: <CheckCircle className="w-3 h-3" />, cls: "text-zinc-600 bg-zinc-50 border-zinc-200/60", label: "Approved" },
-  rejected: { icon: <XCircle className="w-3 h-3" />, cls: "text-zinc-600 bg-zinc-50 border-zinc-200/60", label: "Rejected" },
+  draft: { icon: <Clock className="w-3 h-3" />, cls: "text-amber-700 bg-amber-50 border-amber-200/60", label: "Needs review" },
+  submitted: { icon: <Clock className="w-3 h-3" />, cls: "text-amber-700 bg-amber-50 border-amber-200/60", label: "Needs review" },
+  approved: { icon: <CheckCircle className="w-3 h-3" />, cls: "text-emerald-700 bg-emerald-50 border-emerald-200/60", label: "Approved" },
+  rejected: { icon: <XCircle className="w-3 h-3" />, cls: "text-rose-700 bg-rose-50 border-rose-200/60", label: "Rejected" },
 };
 
 export default function ReportsPage() {
@@ -48,14 +55,23 @@ export default function ReportsPage() {
   async function load() {
     setLoading(true);
     try {
-      const data = await getReports({ status: statusFilter === "all" ? undefined : statusFilter });
+      // Fetch everything — it's a small set — and filter client-side so
+      // "pending" can collapse both draft and submitted into one view
+      // without a backend change.
+      const data = await getReports({});
       setReports(data);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, [statusFilter]); // eslint-disable-line
+  useEffect(() => { load(); }, []); // eslint-disable-line
+
+  const visibleReports = reports.filter((r) => {
+    if (statusFilter === "all") return true;
+    if (statusFilter === "pending") return r.status === "draft" || r.status === "submitted";
+    return r.status === statusFilter;
+  });
 
   async function viewReport(id: number) {
     const detail = await getReport(id).catch(() => null);
@@ -78,7 +94,67 @@ export default function ReportsPage() {
     }
   }
 
-  const totalSpend = reports.reduce((s, r) => s + r.total_amount, 0);
+  function exportCsv() {
+    if (!selected) return;
+    const r = selected.report;
+    const txns = selected.transactions ?? [];
+    // Stay close to a real accounting export shape: one row per transaction
+    // with the report-level metadata repeated, so it can be pivoted in any
+    // downstream tool (NetSuite, QBO, etc.).
+    const headers = [
+      "report_id",
+      "report_status",
+      "employee_id",
+      "employee_name",
+      "period_start",
+      "period_end",
+      "transaction_date",
+      "merchant",
+      "category",
+      "amount_cad",
+      "policy_flags",
+    ];
+    const escape = (v: unknown): string => {
+      if (v === null || v === undefined) return "";
+      const s = String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [headers.join(",")];
+    for (const t of txns) {
+      const flags = Array.isArray(t.policy_flags) ? t.policy_flags.join("; ") : "";
+      lines.push(
+        [
+          r.id,
+          r.status,
+          r.employee_id ?? "",
+          r.employee_name ?? "",
+          r.period_start ?? "",
+          r.period_end ?? "",
+          (t.transaction_date as string | undefined)?.slice(0, 10) ?? "",
+          t.merchant ?? "",
+          t.category_label ?? t.transaction_category ?? "",
+          Number(t.amount_cad ?? 0).toFixed(2),
+          flags,
+        ]
+          .map(escape)
+          .join(","),
+      );
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `expense-report-${r.id}-${(r.employee_name ?? r.employee_id ?? "report")
+      .toString()
+      .replace(/\s+/g, "-")
+      .toLowerCase()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  const totalSpend = visibleReports.reduce((s, r) => s + r.total_amount, 0);
 
   return (
     <div className="flex h-full bg-transparent">
@@ -87,7 +163,7 @@ export default function ReportsPage() {
         <div className="px-6 py-6 border-b border-zinc-100">
           <h1 className="font-bold text-zinc-900 text-[24px] tracking-tight leading-none mb-1.5">Expense Reports</h1>
           <div className="flex items-center justify-between mt-5 w-full bg-zinc-100/50 p-1 rounded-full">
-            {(["all", "draft", "submitted", "approved"] as const).map((s) => (
+            {(["all", "pending", "approved", "rejected"] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
@@ -103,12 +179,12 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {!loading && reports.length > 0 && (
+        {!loading && visibleReports.length > 0 && (
           <div className="px-6 py-3.5 bg-zinc-50/80 border-b border-zinc-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-zinc-400" />
               <span className="text-[12px] font-medium text-zinc-500">
-                {reports.length} report{reports.length !== 1 ? "s" : ""}
+                {visibleReports.length} report{visibleReports.length !== 1 ? "s" : ""}
               </span>
             </div>
             <span className="text-[13px] font-bold text-zinc-900 tabular-nums">${totalSpend.toFixed(2)} CAD</span>
@@ -120,18 +196,20 @@ export default function ReportsPage() {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-5 h-5 animate-spin text-zinc-400" />
             </div>
-          ) : reports.length === 0 ? (
+          ) : visibleReports.length === 0 ? (
             <div className="flex flex-col items-center py-12 text-zinc-400 gap-3">
               <div className="w-12 h-12 rounded-full bg-zinc-50 flex items-center justify-center">
                 <FileText className="w-5 h-5 text-zinc-400" />
               </div>
-              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">No {statusFilter} reports</p>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">
+                No {statusFilter === "all" ? "" : statusFilter} reports
+              </p>
               <p className="text-[13px] text-center px-4 font-medium">
                 Use the chat to generate expense reports
               </p>
             </div>
           ) : (
-            reports.map((r) => {
+            visibleReports.map((r) => {
               const cfg = STATUS_CFG[r.status] ?? STATUS_CFG.draft;
               return (
                 <button
@@ -249,17 +327,48 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              {/* Policy Flags */}
-              {selected.policy_flags && selected.policy_flags.length > 0 && (
-                <div className="mb-5">
-                  <AIRecommendationCard
-                    decision="reject"
-                    reasoning={selected.policy_flags
-                      .map((f) => `${f.merchant} ($${f.amount.toFixed(2)}) — ${f.flags.join("; ")}`)
-                      .join(". ")}
-                  />
-                </div>
-              )}
+              {/* Policy summary — factual roll-up of flagged lines, NOT an
+                  AI verdict on the bundle. The decision (Approve/Reject the
+                  whole report) belongs to the manager; per-transaction
+                  reviews already happened on /approvals. The transactions
+                  table below renders the same flags inline per row, so this
+                  card is purely a "things to look at" summary. */}
+              {selected.policy_flags && selected.policy_flags.length > 0 && (() => {
+                const flaggedTotal = selected.policy_flags.reduce(
+                  (s, f) => s + (f.amount ?? 0),
+                  0,
+                );
+                return (
+                  <div className="mb-5 bg-amber-50/60 border border-amber-200/70 rounded-[20px] p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <ShieldAlertIcon />
+                        <p className="text-[12.5px] font-bold text-amber-900 tracking-tight">
+                          {selected.policy_flags.length} of {selected.transactions.length} transactions flagged
+                        </p>
+                      </div>
+                      <p className="text-[12.5px] font-bold text-amber-900 tabular-nums">
+                        ${flaggedTotal.toFixed(2)}
+                      </p>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {selected.policy_flags.slice(0, 4).map((f, i) => (
+                        <li key={i} className="text-[12.5px] text-amber-900/80 font-medium leading-snug flex items-baseline gap-2">
+                          <span className="text-amber-600 font-bold">·</span>
+                          <span className="font-bold">{f.merchant}</span>
+                          <span className="tabular-nums">${f.amount.toFixed(2)}</span>
+                          <span className="text-amber-700/70">— {f.flags.join("; ")}</span>
+                        </li>
+                      ))}
+                      {selected.policy_flags.length > 4 && (
+                        <li className="text-[11.5px] text-amber-700/60 font-semibold pl-3">
+                          + {selected.policy_flags.length - 4} more in the table below
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                );
+              })()}
 
               {/* Transactions table */}
               {selected.transactions.length > 0 && (
@@ -337,17 +446,24 @@ export default function ReportsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                {selected.report.status === "draft" && (
-                  <button
-                    onClick={() => changeStatus(selected.report.id, "submitted")}
-                    disabled={updating}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-zinc-900 hover:bg-black text-white rounded-[12px] text-[14px] font-bold transition-all shadow-sm disabled:opacity-50"
-                  >
-                    <Send className="w-4 h-4" />
-                    {updating ? "Submitting..." : "Submit for approval"}
-                  </button>
-                )}
-                {selected.report.status === "submitted" && (
+                {/* Export is always available so the manager can hand off
+                    the bundle to accounting at any stage. */}
+                <button
+                  onClick={exportCsv}
+                  className="flex items-center gap-2 px-4 py-2.5 border border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900 rounded-[12px] text-[13px] font-bold transition-all duration-200"
+                  title="Download as CSV for accounting"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Export
+                </button>
+
+                {/* Sift is the manager's view. Drafts ARE the "needs review"
+                    queue — the AI has already grouped the transactions and
+                    surfaced its recommendation. The human-in-the-loop is the
+                    finance manager (the user); their actions are Approve or
+                    Reject directly. */}
+                {(selected.report.status === "draft" ||
+                  selected.report.status === "submitted") && (
                   <>
                     <button
                       onClick={() => changeStatus(selected.report.id, "rejected")}
