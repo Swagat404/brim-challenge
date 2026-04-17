@@ -17,11 +17,14 @@ import {
   BookOpen,
 } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
-import { getApprovals, getApproval, decideApproval } from "@/lib/api";
-import type { Approval, AiDecision } from "@/lib/types";
+import { getApprovals, getApproval, decideApproval, getTransactionDetail } from "@/lib/api";
+import type { Approval, AiDecision, TransactionDetail } from "@/lib/types";
 import MerchantAvatar from "@/components/MerchantAvatar";
 import AIRecommendationCard from "@/components/AIRecommendationCard";
 import PolicyReferenceModal from "@/components/PolicyReferenceModal";
+import SubmissionStatusBadges from "@/components/SubmissionStatusBadges";
+import TransactionSubmissionForm from "@/components/TransactionSubmissionForm";
+import ActivityFeed from "@/components/ActivityFeed";
 
 const MCC_LABELS: Record<number, string> = {
   5541: "Fuel", 5542: "Fuel (auto)", 9399: "Gov. Permits", 5532: "Tires / Parts",
@@ -68,12 +71,14 @@ function ApprovalsContent() {
 
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [selected, setSelected] = useState<ApprovalDetail | null>(null);
+  const [submissionDetail, setSubmissionDetail] = useState<TransactionDetail | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showPolicyRef, setShowPolicyRef] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deciding, setDeciding] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("pending");
+  const [activityKey, setActivityKey] = useState(0);
 
   const loadApprovals = useCallback(async () => {
     setLoading(true);
@@ -100,6 +105,13 @@ function ApprovalsContent() {
       setSelected(detail);
       setShowDetails(false);
       setShowHistory(false);
+      setSubmissionDetail(null);
+      const txnId = detail.approval.transaction_rowid;
+      if (txnId) {
+        getTransactionDetail(txnId)
+          .then(setSubmissionDetail)
+          .catch(() => setSubmissionDetail(null));
+      }
     }
   }
 
@@ -236,6 +248,14 @@ function ApprovalsContent() {
                           </span>
                         )}
                       </p>
+                      {submissionDetail && (
+                        <div className="mt-3">
+                          <SubmissionStatusBadges
+                            submission={submissionDetail.submission}
+                            missing={submissionDetail.missing_required_fields}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -247,6 +267,19 @@ function ApprovalsContent() {
                     reasoning={selected.approval.ai_reasoning}
                     citation={selected.approval.policy_citation}
                     citedSectionId={selected.approval.cited_section_id}
+                  />
+                )}
+
+                {/* ── Submission (receipt + memo + attendees + GL) ─────── */}
+                {submissionDetail && (
+                  <TransactionSubmissionForm
+                    detail={submissionDetail}
+                    onChange={(next) => {
+                      setSubmissionDetail(next);
+                      setActivityKey((k) => k + 1);
+                      // Refresh approval since the AI may have re-decided
+                      if (next.approval?.id) selectApproval(next.approval.id);
+                    }}
                   />
                 )}
 
@@ -353,6 +386,19 @@ function ApprovalsContent() {
                       </div>
                     )}
                   </button>
+                )}
+
+                {/* ── Activity feed for this transaction ────────────── */}
+                {selected.approval.transaction_rowid && (
+                  <div className="bg-white rounded-[20px] border border-zinc-200/60 shadow-sm p-5">
+                    <ActivityFeed
+                      transactionRowid={selected.approval.transaction_rowid}
+                      limit={20}
+                      refreshKey={activityKey}
+                      title="Activity"
+                      compact
+                    />
+                  </div>
                 )}
 
                 {/* ── Progressive disclosure: full transaction record ──── */}

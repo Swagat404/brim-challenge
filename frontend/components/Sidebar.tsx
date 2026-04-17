@@ -10,6 +10,7 @@ import {
   CheckCircle,
   FileText,
   Shield,
+  Receipt,
   Zap,
 } from "lucide-react";
 import { getAgentStats } from "@/lib/api";
@@ -26,8 +27,9 @@ import {
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard, badgeKey: null },
-  { label: "Ask AI", href: "/chat", icon: MessageSquare, badgeKey: null },
+  { label: "Ask Sift", href: "/chat", icon: MessageSquare, badgeKey: null },
   { label: "Approvals", href: "/approvals", icon: CheckCircle, badgeKey: "pending_approvals" as const },
+  { label: "Expenses", href: "/expenses", icon: Receipt, badgeKey: null },
   { label: "Violations", href: "/violations", icon: ShieldAlert, badgeKey: "violation_count" as const },
   { label: "Policy", href: "/policy", icon: Shield, badgeKey: null },
   { label: "Reports", href: "/reports", icon: FileText, badgeKey: "draft_reports" as const },
@@ -63,7 +65,7 @@ export default function Sidebar() {
             <Zap className="w-3.5 h-3.5 text-black" fill="currentColor" />
           </div>
           <span className="font-bold text-[18px] tracking-tight text-white">
-            brim
+            sift
           </span>
         </div>
       </SidebarHeader>

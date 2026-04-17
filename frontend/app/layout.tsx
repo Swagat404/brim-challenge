@@ -12,8 +12,8 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Brim Expense Intelligence",
-  description: "AI-powered fleet expense management for Brim Financial",
+  title: "Sift Expense Intelligence",
+  description: "AI-powered policy agent and fleet expense management for Brim Financial",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

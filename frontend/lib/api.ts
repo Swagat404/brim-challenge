@@ -386,6 +386,7 @@ export async function patchSubmission(
     business_purpose?: string;
     attendees?: string[];
     gl_code?: string;
+    rerun_recommendation?: boolean;
   }
 ): Promise<TransactionDetail> {
   const res = await fetch(`${BASE}/api/transactions/${rowid}/submission`, {
