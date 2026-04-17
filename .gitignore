@@ -59,3 +59,4 @@ policy-enforcer/
 *.png
 # but always ship product assets shipped with the frontend (logo, docs screenshots, etc.)
 !frontend/public/**/*.png
+!frontend/public/**/*.mp4

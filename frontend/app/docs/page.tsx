@@ -35,7 +35,6 @@ const NAV: NavSection[] = [
     items: [
       { id: "overview", label: "Overview", icon: Sparkles },
       { id: "persona", label: "Who Sift is for", icon: ShieldCheck },
-      { id: "tour", label: "5-minute tour", icon: ArrowRight },
     ],
   },
   {
@@ -46,6 +45,12 @@ const NAV: NavSection[] = [
       { id: "transactions", label: "Transactions", icon: Database },
       { id: "violations", label: "Violations", icon: ShieldCheck },
       { id: "reports", label: "Expense reports", icon: FileText },
+    ],
+  },
+  {
+    group: "Talk to your data",
+    items: [
+      { id: "ask-sift", label: "Ask Sift", icon: MessageSquare },
     ],
   },
   {
@@ -71,12 +76,6 @@ const NAV: NavSection[] = [
     group: "Policy suggestions",
     items: [
       { id: "suggestions", label: "What Sift surfaces", icon: Lightbulb },
-    ],
-  },
-  {
-    group: "Talk to your data",
-    items: [
-      { id: "ask-sift", label: "Ask Sift", icon: MessageSquare },
     ],
   },
 ];
@@ -181,24 +180,31 @@ export default function DocsPage() {
             <Section id="overview" eyebrow="Get started" title="What is Sift?">
               <p>
                 Sift is the finance team&apos;s AI co-pilot for expense
-                management. It applies your written expense policy to every
-                card transaction and produces a three-state recommendation
-                — <em>Approval recommended</em>,{" "}
-                <em>Requires review</em>, or{" "}
-                <em>Rejection recommended</em> — that the approver acts on.
+                management. It applies your written expense policy to
+                every card transaction and produces a three-state
+                recommendation — <em>Approval recommended</em>,{" "}
+                <em>Requires review</em>, or <em>Rejection recommended</em>{" "}
+                — that the approver acts on.
               </p>
               <p>
-                Beyond reviewing transactions, the agent surfaces gaps in
-                the policy itself, drafts the fix in conversation, and
-                lets you accept structured edits with one click. Sift
-                closes the loop from enforcement to authorship.
+                The dashboard surfaces what needs attention: a small
+                inbox of pending approvals filtered out of thousands of
+                transactions, your policy violations ranked by severity,
+                expense reports waiting for sign-off, and where your
+                spend is going across the company.
               </p>
               <Figure
-                src="/docs/shot8.png"
-                alt="Sift welcome page"
-                caption="Four verbs that map to four capabilities — Ask, Review, Approve, Report."
+                src="/docs/shot1.png"
+                alt="Sift dashboard showing total spend, department breakdown, 90-day trend, and pending approvals count"
+                caption="The dashboard. Total spend, department split, 90-day trend, and the inbox count are all one glance away."
                 priority
               />
+              <p>
+                Beyond reviewing transactions, the agent surfaces gaps
+                in the policy itself, drafts the fix in conversation,
+                and lets you accept structured edits with one click.
+                Sift closes the loop from enforcement to authorship.
+              </p>
             </Section>
 
             <Section id="persona" eyebrow="Get started" title="Who Sift is for">
@@ -216,44 +222,6 @@ export default function DocsPage() {
                 read-mostly ledger; Reports are AI-grouped bundles ready
                 for sign-off and accounting handoff.
               </Callout>
-            </Section>
-
-            <Section id="tour" eyebrow="Get started" title="5-minute tour">
-              <p>
-                The full loop in five steps — review, reason, govern.
-              </p>
-              <ol>
-                <li>
-                  <strong>Open the dashboard.</strong> Thousands of
-                  transactions filtered down to a small inbox of items
-                  that need a human decision.
-                </li>
-                <li>
-                  <strong>Open one approval.</strong> See Sift&apos;s
-                  three-state recommendation with a citation back to the
-                  exact policy clause.
-                </li>
-                <li>
-                  <strong>Upload a receipt.</strong> Sift extracts the
-                  receipt&apos;s details and re-reasons about the
-                  approval in real time.
-                </li>
-                <li>
-                  <strong>Ask Sift a question.</strong> Plain English in,
-                  chart and prose answer out — with conversation memory
-                  across follow-ups.
-                </li>
-                <li>
-                  <strong>Edit the policy via chat.</strong> The agent
-                  drafts a structured edit; you accept or reject the
-                  inline diff.
-                </li>
-              </ol>
-              <Figure
-                src="/docs/shot1.png"
-                alt="Sift dashboard"
-                caption="Dashboard — total spend, department breakdown, 90-day trend, and the inbox count."
-              />
             </Section>
 
             {/* ─────────── CORE WORKFLOWS ─────────── */}
@@ -320,8 +288,8 @@ export default function DocsPage() {
               </p>
               <Figure
                 src="/docs/receipt-widget.png"
-                alt="Receipt upload widget showing an attached receipt with extracted character count"
-                caption="The receipt slot inside an approval. Once attached, Sift surfaces the extracted character count and re-runs the recommendation."
+                alt="Receipt slot in an approval showing a thumbnail of a Petro-Canada paper receipt and the extracted OCR text expanded below"
+                caption="A Petro-Canada fuel receipt attached to an approval. Click the chevron to expand the extracted text — every line of the original is captured verbatim and re-runs the recommendation."
               />
               <p>
                 The moment a receipt is attached, the agent re-reasons
@@ -454,6 +422,44 @@ export default function DocsPage() {
                 cleared. Approving a report is the CFO&apos;s seal: it
                 acknowledges the AI&apos;s bundle and triggers the
                 downstream accounting handoff.
+              </Callout>
+            </Section>
+
+            {/* ─────────── ASK SIFT ─────────── */}
+
+            <Section id="ask-sift" eyebrow="Talk to your data" title="Ask Sift — natural language analytics">
+              <p>
+                Ask Sift converts English questions into structured
+                queries over your transaction data, runs them, and
+                answers in prose with charts when relevant. The agent
+                maintains conversation state across follow-ups — ask{" "}
+                <em>&quot;what did Operations spend on fuel?&quot;</em>{" "}
+                then{" "}
+                <em>&quot;how does that compare to maintenance?&quot;</em>{" "}
+                without re-stating context.
+              </p>
+              <Video
+                src="/docs/ask-sift-demo.mp4"
+                caption="Ask Sift in action — type a question, watch the agent reason, get a chart and a written answer back. Real-time streaming, no fixed report templates."
+              />
+              <Figure
+                src="/docs/shot2.png"
+                alt="Ask Sift answering a violations question with a ranked employee table"
+                caption="Plain English in, structured table out. The agent breaks down the answer by severity and lists violation types per employee."
+              />
+              <h3>What Sift handles well</h3>
+              <ul>
+                <li>Aggregations across departments, periods, employees, and categories.</li>
+                <li>Comparisons — X vs Y, over time, top N.</li>
+                <li>Charts auto-generated when the question calls for one.</li>
+                <li>Multi-step reasoning — find X, then check Y.</li>
+                <li>Conversation memory within a session.</li>
+              </ul>
+              <Callout title="Where to find it">
+                Ask Sift lives in the left sidebar. Sessions persist
+                across page reloads — your chat history is still there
+                when you come back tomorrow. Click{" "}
+                <strong>+ New chat</strong> to start fresh.
               </Callout>
             </Section>
 
@@ -822,38 +828,6 @@ $500 equipment cap and $75/month internet stipend.`}
               </p>
             </Section>
 
-            {/* ─────────── ASK SIFT ─────────── */}
-
-            <Section id="ask-sift" eyebrow="Talk to your data" title="Ask Sift — natural language analytics">
-              <p>
-                Ask Sift converts English questions into structured SQL
-                over the transaction warehouse, runs them, and answers in
-                prose with charts when relevant. The agent maintains
-                conversation state across follow-ups — ask{" "}
-                <em>&quot;what did Operations spend on fuel?&quot;</em>{" "}
-                then <em>&quot;how does that compare to maintenance?&quot;</em>{" "}
-                without re-stating context.
-              </p>
-              <Figure
-                src="/docs/shot2.png"
-                alt="Ask Sift answering a violations question with a ranked employee table"
-                caption="Plain English in, structured table out. The agent breaks down the answer by severity and lists violation types per employee."
-              />
-              <h3>What Sift handles well</h3>
-              <ul>
-                <li>Aggregations across departments, periods, employees, and categories.</li>
-                <li>Comparisons — X vs Y, over time, top N.</li>
-                <li>Charts auto-generated when the question calls for one.</li>
-                <li>Multi-step reasoning — find X, then check Y.</li>
-                <li>Conversation memory within a session.</li>
-              </ul>
-              <Callout title="Where to find it">
-                Ask Sift lives in the left sidebar. Sessions persist
-                across page reloads — your chat history is still there
-                when you come back tomorrow. Click{" "}
-                <strong>+ New chat</strong> to start fresh.
-              </Callout>
-            </Section>
 
             <div className="mt-16 mb-8 pt-8 border-t border-zinc-200 flex items-center justify-between">
               <Link
@@ -945,6 +919,36 @@ function Callout({
         {children}
       </div>
     </div>
+  );
+}
+
+function Video({
+  src,
+  caption,
+  poster,
+}: {
+  src: string;
+  caption: string;
+  poster?: string;
+}) {
+  return (
+    <figure className="my-7">
+      <div className="rounded-[16px] overflow-hidden border border-zinc-200 shadow-sm bg-zinc-900">
+        <video
+          src={src}
+          poster={poster}
+          autoPlay
+          loop
+          muted
+          playsInline
+          controls
+          className="w-full h-auto block"
+        />
+      </div>
+      <figcaption className="text-[12.5px] text-zinc-500 mt-2.5 leading-relaxed font-medium">
+        {caption}
+      </figcaption>
+    </figure>
   );
 }
 
