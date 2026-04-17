@@ -102,13 +102,20 @@ app = FastAPI(
 )
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-# Frontend (Next.js) runs on :3000 in dev; in prod set CORS_ORIGINS env var.
-_origins_env = os.environ.get("CORS_ORIGINS", "")
-origins = (
-    [o.strip() for o in _origins_env.split(",") if o.strip()]
-    if _origins_env
-    else ["http://localhost:3000", "http://127.0.0.1:3000"]
-)
+# Frontend (Next.js) runs on :3000 in dev; in prod set CORS_ORIGINS to the public
+# frontend origin(s), comma-separated, e.g. https://my-app.up.railway.app
+# Trailing slashes are stripped so they match the browser Origin header.
+_cors_raw = os.environ.get("CORS_ORIGINS", "").strip()
+if _cors_raw:
+    origins = [
+        o.strip().rstrip("/")
+        for o in _cors_raw.split(",")
+        if o.strip()
+    ]
+else:
+    origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+logger.info("CORS allow_origins: %s", origins)
 
 app.add_middleware(
     CORSMiddleware,
