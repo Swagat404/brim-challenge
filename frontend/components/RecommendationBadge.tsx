@@ -74,13 +74,17 @@ export default function RecommendationBadge({
         <button
           type="button"
           onClick={(e) => {
+            e.preventDefault();
             e.stopPropagation();
             setOpen((o) => !o);
           }}
           onMouseEnter={() => setOpen(true)}
           onMouseLeave={() => setOpen(false)}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
           aria-label="Show cited policy rule"
-          className="ml-1.5 p-0.5 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors"
+          aria-expanded={open}
+          className="ml-1.5 p-1 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors"
         >
           <Info className="w-3.5 h-3.5" />
         </button>
@@ -89,7 +93,9 @@ export default function RecommendationBadge({
       {open && citation && (
         <span
           role="tooltip"
-          className="absolute top-full left-0 mt-2 w-[280px] z-30 bg-white border border-zinc-200 rounded-[12px] shadow-[0_8px_24px_rgba(0,0,0,0.08)] p-3 text-left"
+          className="absolute top-full left-0 mt-2 w-[300px] z-30 bg-white border border-zinc-200 rounded-[12px] shadow-[0_8px_24px_rgba(0,0,0,0.10)] p-4 text-left"
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
         >
           <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">
             Cited rule

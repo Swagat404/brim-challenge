@@ -48,9 +48,23 @@ async def list_approvals(
     )
 
     return {
-        "approvals": df.to_dict("records") if not df.empty else [],
-        "total": len(df),
+        "approvals": _sanitize_rows(df),
+        "total": int(len(df)),
     }
+
+
+def _sanitize_rows(df) -> list[dict]:
+    """Drop NaN/Inf floats and turn NaN ints back into None so the response
+    is JSON-serializable. pandas-from-LEFT-JOIN is the usual culprit."""
+    import math
+    if df.empty:
+        return []
+    rows = df.to_dict("records")
+    for r in rows:
+        for k, v in list(r.items()):
+            if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                r[k] = None
+    return rows
 
 
 @router.get("/approvals/{approval_id}")

@@ -71,6 +71,7 @@ function ApprovalsContent() {
 
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [selected, setSelected] = useState<ApprovalDetail | null>(null);
+  const [loadingDetailId, setLoadingDetailId] = useState<number | null>(null);
   const [submissionDetail, setSubmissionDetail] = useState<TransactionDetail | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -100,12 +101,19 @@ function ApprovalsContent() {
   useEffect(() => { loadApprovals(); }, [loadApprovals]);
 
   async function selectApproval(id: number) {
+    // Clear stale content immediately so the user sees a loading state
+    // instead of the previous request's data while we fetch.
+    setSelected(null);
+    setSubmissionDetail(null);
+    setShowDetails(false);
+    setShowHistory(false);
+    setLoadingDetailId(id);
+
     const detail = await getApproval(id).catch(() => null);
+    // Drop the response if the user already clicked another row
+    setLoadingDetailId((curr) => (curr === id ? null : curr));
     if (detail) {
       setSelected(detail);
-      setShowDetails(false);
-      setShowHistory(false);
-      setSubmissionDetail(null);
       const txnId = detail.approval.transaction_rowid;
       if (txnId) {
         getTransactionDetail(txnId)
@@ -199,10 +207,17 @@ function ApprovalsContent() {
       {/* ───────────────── Right: detail (card-first) ───────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
         {!selected ? (
-          <div className="flex-1 flex items-center justify-center text-zinc-400 flex-col gap-3">
-            <ShieldCheck className="w-10 h-10 opacity-50" />
-            <p className="text-[15px] font-medium">Select a request to review</p>
-          </div>
+          loadingDetailId !== null ? (
+            <div className="flex-1 flex items-center justify-center text-zinc-400 flex-col gap-3">
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <p className="text-[13px] font-medium">Loading request…</p>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-zinc-400 flex-col gap-3">
+              <ShieldCheck className="w-10 h-10 opacity-50" />
+              <p className="text-[15px] font-medium">Select a request to review</p>
+            </div>
+          )
         ) : (
           <>
             <div className="flex-1 overflow-y-auto px-10 pt-8 pb-6">

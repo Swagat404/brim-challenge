@@ -94,7 +94,8 @@ class PolicyEditorTool(BaseTool):
         if not params.edit:
             return self.err("apply_edit requires an `edit` object")
         current = policy_loader.load_structured_policy() or {}
-        merged = {**current, **params.edit}
+        from api.routes.policy_doc import _smart_merge
+        merged = _smart_merge(current, params.edit)
         new_id = policy_loader.save_structured_policy(merged, updated_by="chat")
         activity.emit(
             "policy_edit",

@@ -45,18 +45,24 @@ async def get_document():
 async def patch_document(
     patch: dict[str, Any] = Body(..., description="Partial update of top-level fields"),
 ):
-    """Shallow-merge update of the top-level keys of the policy JSON.
+    """Smart-merge update of the top-level keys of the policy JSON.
 
-    Sections / hidden notes / submission requirements / auto_approval_rules are
-    replaced wholesale when included — frontend forms always send the full
-    sub-array for those fields. This keeps the API simple and avoids JSON-path
-    patching bugs.
+    Frontend forms (ThresholdsForm, AutoApprovalRulesForm,
+    SubmissionRequirementsForm, PolicyDocumentEditor) always send the full
+    sub-array for fields they own — those replace wholesale.
+
+    But the chat-driven `policy_editor_tool.apply_edit` and
+    `policy_suggestions_tool.apply_suggestion` paths often send a single new
+    item meant to be appended (e.g. `{"sections": [{...one new section...}]}`).
+    For arrays-of-objects-with-id (sections, hidden_notes nested in sections,
+    auto_approval_rules.rules, submission_requirements) we merge by id so a
+    suggestion that introduces ONE new section doesn't wipe the other four.
     """
     current = policy_loader.load_structured_policy()
     if current is None:
         raise HTTPException(404, "No current policy to patch")
 
-    merged = {**current, **patch}
+    merged = _smart_merge(current, patch)
     new_id = policy_loader.save_structured_policy(merged, updated_by="admin")
 
     activity.emit(
@@ -122,6 +128,48 @@ async def confirm_upload(body: dict = Body(...)):
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+
+# Top-level fields that hold arrays of objects with an `id` field. When a
+# patch supplies one of these, we merge by id (incoming items overwrite
+# existing items with the same id; new items append; un-mentioned items
+# stay put). For everything else, the patch value replaces the current one.
+_ID_KEYED_ARRAYS = {"sections", "submission_requirements"}
+
+
+def _smart_merge(current: dict, patch: dict) -> dict:
+    out = {**current}
+    for k, new_val in patch.items():
+        if k == "auto_approval_rules" and isinstance(new_val, dict) and "rules" in new_val:
+            existing_rules = (current.get("auto_approval_rules") or {}).get("rules", [])
+            merged_rules = _merge_by_id(existing_rules, new_val["rules"])
+            out["auto_approval_rules"] = {
+                **(current.get("auto_approval_rules") or {}),
+                **new_val,
+                "rules": merged_rules,
+            }
+            continue
+
+        if k in _ID_KEYED_ARRAYS and isinstance(new_val, list):
+            existing = current.get(k) or []
+            out[k] = _merge_by_id(existing, new_val)
+            continue
+
+        out[k] = new_val
+    return out
+
+
+def _merge_by_id(existing: list[dict], incoming: list[dict]) -> list[dict]:
+    """Merge two lists of objects keyed on 'id'. Incoming overrides; new appends."""
+    by_id = {item.get("id"): dict(item) for item in existing if item.get("id")}
+    appended: list[dict] = []
+    for item in incoming:
+        item_id = item.get("id")
+        if item_id and item_id in by_id:
+            by_id[item_id] = {**by_id[item_id], **item}
+        else:
+            appended.append(item)
+    return list(by_id.values()) + appended
 
 
 def _shallow_diff(current: dict, proposed: dict) -> dict:

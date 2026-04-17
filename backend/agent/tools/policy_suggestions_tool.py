@@ -212,7 +212,8 @@ def apply_suggestion(suggestion_id: int) -> Optional[dict]:
         return row
 
     current = policy_loader.load_structured_policy() or {}
-    merged = {**current, **edit}
+    from api.routes.policy_doc import _smart_merge
+    merged = _smart_merge(current, edit)
     new_id = policy_loader.save_structured_policy(merged, updated_by=f"suggestion:{suggestion_id}")
     db.execute(
         "UPDATE policy_suggestions SET status = 'applied' WHERE id = ?",
