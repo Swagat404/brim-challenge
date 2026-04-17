@@ -550,13 +550,22 @@ def _load_department_budget(department: str) -> Optional[dict]:
     if df.empty:
         return None
     cap = float(df.iloc[0]["monthly_cap"])
+    # Rolling 30 days from the latest transaction date (same anchor as
+    # /api/budgets/departments) so the AI sees real numbers even when
+    # the dataset doesn't extend to wall-clock today.
     mtd_df = db.query_df(
-        """SELECT COALESCE(SUM(amount_cad), 0) AS spent
-             FROM transactions
+        """WITH latest AS (
+              SELECT COALESCE(MAX(transaction_date), date('now')) AS d
+                FROM transactions
+               WHERE is_operational = 1 AND debit_or_credit = 'Debit'
+           )
+           SELECT COALESCE(SUM(amount_cad), 0) AS spent
+             FROM transactions, latest
             WHERE department = ?
               AND is_operational = 1
               AND debit_or_credit = 'Debit'
-              AND transaction_date >= date('now', 'start of month')""",
+              AND transaction_date >= date(latest.d, '-30 days')
+              AND transaction_date <= latest.d""",
         (department,),
     )
     spent = float(mtd_df.iloc[0]["spent"] or 0)

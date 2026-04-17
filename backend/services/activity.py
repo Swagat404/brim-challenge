@@ -125,15 +125,24 @@ def rollup(window_days: int = 90) -> dict:
 
     Returns count + total $ of `auto_approved` events in the window, plus
     the most recent timestamp.
+
+    The window is anchored to the latest auto_approved event (or, if none,
+    real-world today). Anchoring to wall-clock 'now' would silently shrink
+    the rollup as the calendar drifts past the seed dataset's range; the
+    audit caught this in /api/activity/rollup.
     """
     df = db.query_df(
-        """SELECT a.id, a.occurred_at, a.approval_id, a.metadata_json,
+        f"""WITH latest AS (
+              SELECT COALESCE(MAX(occurred_at), date('now')) AS d
+                FROM agent_activity
+               WHERE action = 'auto_approved'
+           )
+           SELECT a.id, a.occurred_at, a.approval_id, a.metadata_json,
                   ap.amount
-             FROM agent_activity a
+             FROM agent_activity a, latest
         LEFT JOIN approvals ap ON ap.id = a.approval_id
             WHERE a.action = 'auto_approved'
-              AND a.occurred_at >= date('now', ?)""",
-        (f"-{int(window_days)} days",),
+              AND a.occurred_at >= date(latest.d, '-{int(window_days)} days')""",
     )
     if df.empty:
         return {"count": 0, "total_amount": 0.0, "last_at": None, "window_days": window_days}

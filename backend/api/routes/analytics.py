@@ -15,14 +15,21 @@ router = APIRouter()
 
 @router.get("/analytics/department-spend")
 async def department_spend():
-    """Total spend and transaction count per department (excludes bank payments)."""
+    """Total operational debit spend and transaction count per department.
+
+    Uses the canonical `is_operational=1 AND debit_or_credit='Debit'` filter
+    that every other spend metric in the app uses. The audit caught us
+    using a looser `transaction_code != 108` here that included credits
+    and inflated each department's total by ~$29K total.
+    """
     df = db.query_df(
         """SELECT e.department,
                   SUM(t.amount_cad) as total_spend,
                   COUNT(*) as txn_count
            FROM transactions t
            JOIN employees e ON t.employee_id = e.id
-           WHERE t.transaction_code != 108
+           WHERE t.is_operational = 1
+             AND t.debit_or_credit = 'Debit'
            GROUP BY e.department
            ORDER BY total_spend DESC"""
     )
@@ -37,27 +44,33 @@ async def agent_stats():
     violation/approval summaries.
 
     Returns:
-      total_spend         — all-time spend (over data_window)
-      spend_90_days       — last 90 days only (for the trend tile)
+      total_spend         — all-time spend (over data_window).
+                            Uses `is_operational=1 AND debit_or_credit='Debit'`
+                            — same canonical filter every other spend metric uses.
+      spend_90_days       — last 90 days only (for the trend tile),
+                            anchored to the latest transaction date in the
+                            dataset (NOT wall-clock today).
       data_window         — {"start": ISO, "end": ISO} so the UI can label
                             the time window of total_spend honestly.
     """
     totals = db.query_df(
         """SELECT COUNT(*) as total_txns,
-                  SUM(CASE WHEN debit_or_credit='Debit' AND transaction_code != 108 THEN amount_cad ELSE 0 END) as total_spend,
+                  SUM(CASE WHEN is_operational = 1 AND debit_or_credit = 'Debit'
+                           THEN amount_cad ELSE 0 END) as total_spend,
                   COUNT(DISTINCT employee_id) as employee_count,
                   MIN(transaction_date) as window_start,
                   MAX(transaction_date) as window_end
            FROM transactions
-           WHERE transaction_code != 108"""
+           WHERE is_operational = 1"""
     )
     spend_90 = db.query_df(
         """SELECT COALESCE(SUM(amount_cad), 0) AS spend_90
              FROM transactions
-            WHERE debit_or_credit = 'Debit'
-              AND transaction_code != 108
+            WHERE is_operational = 1
+              AND debit_or_credit = 'Debit'
               AND transaction_date >= date(
-                    (SELECT MAX(transaction_date) FROM transactions),
+                    (SELECT MAX(transaction_date) FROM transactions
+                      WHERE is_operational = 1),
                     '-90 days'
                 )"""
     )

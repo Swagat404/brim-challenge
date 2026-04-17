@@ -310,6 +310,31 @@ def seed_approvals(conn: sqlite3.Connection) -> None:
     print("Wiping pending approvals…")
     cur.execute("DELETE FROM approvals WHERE status = 'pending'")
 
+    # Also drop any auto_approved approvals tied to the txns we're about to
+    # re-seed, so we don't end up with two approval rows for one transaction
+    # (which would let /api/transactions/{rowid} and /api/approvals?status=pending
+    # disagree about what the canonical row is).
+    txn_ids_to_clear: list[int] = []
+    for spec in APPROVALS_DEMO:
+        emp_id, merchant, amount = spec["lookup"]
+        rowid = _find_rowid(conn, emp_id, merchant, amount)
+        if rowid is not None:
+            txn_ids_to_clear.append(rowid)
+    if txn_ids_to_clear:
+        placeholders = ",".join("?" for _ in txn_ids_to_clear)
+        cleared = cur.execute(
+            f"DELETE FROM approvals WHERE transaction_rowid IN ({placeholders})",
+            txn_ids_to_clear,
+        ).rowcount
+        if cleared:
+            print(f"  · cleared {cleared} stale approval row(s) for re-seeded txns")
+        # Also drop the activity rows attached to those approvals so the
+        # rollup numbers don't double-count them after re-seeding.
+        cur.execute(
+            f"DELETE FROM agent_activity WHERE transaction_rowid IN ({placeholders})",
+            txn_ids_to_clear,
+        )
+
     seeded = 0
     for spec in APPROVALS_DEMO:
         emp_id, merchant, amount = spec["lookup"]

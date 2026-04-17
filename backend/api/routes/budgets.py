@@ -24,9 +24,23 @@ router = APIRouter()
 
 @router.get("/budgets/departments")
 async def list_department_budgets():
-    """All departments (from employees table) joined with caps and MTD spend."""
+    """Per-department monthly cap + spend over the last 30 days.
+
+    The "spend" column is a 30-day rolling window anchored to the most
+    recent transaction date in the dataset (NOT real-world today). The
+    seeded dataset's last day is in April 2026 with very sparse data;
+    anchoring to wall-clock today would show a near-empty picture once
+    real time drifts past the data window. A 30-day rolling window from
+    the data's own latest day gives meaningful numbers no matter when
+    the demo is running.
+    """
     df = db.query_df(
-        """SELECT d.department,
+        """WITH latest AS (
+              SELECT COALESCE(MAX(transaction_date), date('now')) AS d
+                FROM transactions
+               WHERE is_operational = 1 AND debit_or_credit = 'Debit'
+           )
+           SELECT d.department,
                   COALESCE(b.monthly_cap, 0) AS monthly_cap,
                   b.updated_at,
                   b.updated_by,
@@ -38,10 +52,11 @@ async def list_department_budgets():
               SELECT department,
                      SUM(amount_cad) AS mtd_spend,
                      COUNT(DISTINCT employee_id) AS active_employees
-                FROM transactions
+                FROM transactions, latest
                WHERE is_operational = 1
                  AND debit_or_credit = 'Debit'
-                 AND transaction_date >= date('now', 'start of month')
+                 AND transaction_date >= date(latest.d, '-30 days')
+                 AND transaction_date <= latest.d
             GROUP BY department
         ) s ON s.department = d.department
             ORDER BY d.department"""

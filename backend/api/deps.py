@@ -16,9 +16,9 @@ from collections import defaultdict
 from typing import Literal
 
 from agent.base_agent import (
-    ANALYTICS_SYSTEM_PROMPT,
     POLICY_EDITOR_SYSTEM_PROMPT,
     ExpenseAgent,
+    _build_analytics_prompt,
 )
 from agent.models import Message
 from agent.tools.approval_tool import ApprovalTool
@@ -43,6 +43,9 @@ def get_agent(persona: Persona = "analytics") -> ExpenseAgent:
         return _agents[persona]
 
     if persona == "analytics":
+        # Build the system prompt at agent-construction time so it includes
+        # the data window — keeps "today" / "last 30 days" reasoning consistent
+        # with the dashboard regardless of when the demo runs.
         _agents[persona] = ExpenseAgent(
             tools=[
                 QueryTool(),
@@ -51,7 +54,7 @@ def get_agent(persona: Persona = "analytics") -> ExpenseAgent:
                 ApprovalTool(),
                 ReportTool(),
             ],
-            system_prompt=ANALYTICS_SYSTEM_PROMPT,
+            system_prompt=_build_analytics_prompt(),
             persona="analytics",
         )
     elif persona == "policy_editor":

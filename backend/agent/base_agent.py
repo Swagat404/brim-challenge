@@ -51,7 +51,41 @@ from agent.tools.base_tool import BaseTool
 
 logger = logging.getLogger(__name__)
 
-ANALYTICS_SYSTEM_PROMPT = """You are Sift, an AI-powered expense intelligence assistant for a fleet trucking company.
+def _data_window() -> tuple[str, str]:
+    """Return (min, max) ISO transaction dates from the live DB.
+
+    Used to anchor "today" / "last N days" / "this quarter" in the analytics
+    system prompt so the LLM uses dates that actually have data, instead of
+    real-world today (which the dataset might not extend to).
+    """
+    try:
+        from data import db
+        df = db.query_df(
+            "SELECT MIN(transaction_date) AS lo, MAX(transaction_date) AS hi "
+            "FROM transactions WHERE is_operational = 1"
+        )
+        if df.empty or df.iloc[0]["hi"] is None:
+            return ("", "")
+        return (str(df.iloc[0]["lo"])[:10], str(df.iloc[0]["hi"])[:10])
+    except Exception:
+        return ("", "")
+
+
+def _build_analytics_prompt() -> str:
+    lo, hi = _data_window()
+    window_note = (
+        f"\nDATASET WINDOW: transactions span {lo} to {hi}. When the user says "
+        f'"today", "this month", "last 30 days", "Q1", "this quarter", etc., '
+        f"interpret those windows relative to the latest data date ({hi}), "
+        f"NOT the real-world calendar today. For example: 'last 30 days' = "
+        f"the 30 days ending {hi}; 'this month' = the calendar month "
+        f"containing {hi}.\n"
+        if lo and hi else ""
+    )
+    return ANALYTICS_PROMPT_BODY + window_note
+
+
+ANALYTICS_PROMPT_BODY = """You are Sift, an AI-powered expense intelligence assistant for a fleet trucking company.
 You have access to 8 months of transaction data (Sep 2025 – Mar 2026) covering ~50 employees
 across 7 departments operating in the USA and Canada.
 
@@ -77,7 +111,17 @@ When answering follow-up questions, always use context from prior messages in th
 When you call a tool, explain briefly what you're doing before calling it.
 Present numbers in CAD unless the user asks for USD. Round to 2 decimal places.
 Prefer query_transactions for simple grouping/aggregation. Use run_sql_query when you need JOINs, subqueries, window functions, or budget comparisons.
+
+CANONICAL SPEND FILTER: when computing spend totals, ALWAYS use
+`is_operational = 1 AND debit_or_credit = 'Debit'`. Anything looser (e.g.
+just `transaction_code != 108`) double-counts admin/credit rows and disagrees
+with the dashboard. Numbers MUST reconcile across surfaces.
 """
+
+# Backwards-compat alias — older code reads ANALYTICS_SYSTEM_PROMPT directly,
+# but new code should call _build_analytics_prompt() to get the per-request
+# version with the live data window injected.
+ANALYTICS_SYSTEM_PROMPT = ANALYTICS_PROMPT_BODY
 
 
 POLICY_EDITOR_SYSTEM_PROMPT = """You are Sift's Policy Editor assistant. You sit in a sidebar inside the

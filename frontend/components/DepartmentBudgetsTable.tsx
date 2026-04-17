@@ -68,6 +68,7 @@ export default function DepartmentBudgetsTable() {
           <h3 className="text-[14px] font-bold tracking-tight text-zinc-900">Department monthly caps</h3>
           <p className="text-[12px] text-zinc-500 font-medium">
             Caps are read by Sift when assembling pre-approval context.
+            "Last 30 days" rolls back from the most recent transaction in the dataset.
           </p>
         </div>
       </div>
@@ -76,7 +77,7 @@ export default function DepartmentBudgetsTable() {
         <thead>
           <tr className="bg-zinc-50/80 border-b border-zinc-100">
             <th className="text-left px-6 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Department</th>
-            <th className="text-right px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">MTD spend</th>
+            <th className="text-right px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Last 30 days</th>
             <th className="text-right px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Cap</th>
             <th className="text-left px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">% Used</th>
             <th className="text-right px-6 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Edit</th>
