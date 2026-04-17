@@ -1,0 +1,11 @@
+# Railway/Nixpacks hints — use with service Root Directory = /backend
+# Helps the builder pick Python + pip without scanning the whole monorepo.
+
+[phases.setup]
+nixPkgs = ["python311"]
+
+[phases.install]
+cmds = ["pip install --no-cache-dir -r requirements.txt"]
+
+[start]
+cmd = "uvicorn api.main:app --host 0.0.0.0 --port $PORT"

@@ -1,0 +1,13 @@
+# Railway/Nixpacks — use with service Root Directory = /frontend
+# Next.js 16 requires Node >= 20.9; Nixpacks defaults to 18 without this.
+[variables]
+NIXPACKS_NODE_VERSION = "20"
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm run start -- --port $PORT"
