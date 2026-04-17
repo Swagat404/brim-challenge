@@ -2,14 +2,11 @@
 PDF policy extractor — used by both the bootstrap script and the
 `POST /api/policy/document/upload` route.
 
-Single code path, one Pydantic schema, one Claude prompt. If anything fails
-(missing PDF, empty text, model error, schema validation) we return None and
-let the caller decide whether to keep the current policy or use a fallback.
+Single code path: pdfplumber pulls text from the PDF, Claude extracts a
+strict-schema JSON document. No fallbacks, no stubs — if extraction fails the
+caller gets `None` and surfaces the error to the user.
 
-Test isolation:
-    POLICY_EXTRACTOR_STUB=1   -> bypass Claude; deterministically construct a
-                                 minimal valid PolicyDocument from the text length.
-                                 Tests use this to avoid flaky API calls.
+Tests should monkeypatch `_ask_claude` to avoid hitting the API.
 """
 from __future__ import annotations
 
@@ -89,14 +86,13 @@ def extract_pdf_text(pdf_bytes: bytes) -> str:
 def extract_structured_policy(pdf_bytes: bytes) -> Optional[PolicyDocument]:
     """Top-level entry: PDF bytes -> validated PolicyDocument or None.
 
-    Uses Claude unless POLICY_EXTRACTOR_STUB=1 is set (test mode).
+    `None` when the text can't be extracted, Claude returns an unparseable
+    response, or the response fails Pydantic validation. Caller decides what
+    to do (the upload route returns 422 to the user).
     """
     text = extract_pdf_text(pdf_bytes)
     if not text.strip():
         return None
-
-    if os.environ.get("POLICY_EXTRACTOR_STUB") == "1":
-        return _stub_policy_from_text(text)
 
     raw = _ask_claude(text)
     if not raw:
@@ -151,7 +147,7 @@ Read the policy text below and produce a JSON object that matches this schema EX
 }}
 
 Rules:
-- If the policy doesn't state a value, use a sensible default (pre_auth: 50, tip_meal_max_pct: 20, tip_service_max_pct: 15).
+- Extract values directly from the policy text. Do NOT invent thresholds the policy doesn't state.
 - Always include at least one auto_approval_rule for fleet operations under $500 (MCC 5541, 5542, 5532, 7538, 7542, 7549, 9399).
 - Always include a submission_requirements entry that requires a receipt for any expense over the receipt_required threshold.
 - Sections should preserve the policy's actual structure (Travel, Meals, Tips, Cards, etc.) with the original prose in `body`.
@@ -180,48 +176,9 @@ def _ask_claude(text: str) -> Optional[dict]:
         )
         raw = msg.content[0].text.strip()
         if raw.startswith("```"):
-            # Strip ``` fences if the model added them despite instructions
             lines = raw.split("\n")
             raw = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
         return json.loads(raw)
     except Exception as exc:
         logger.warning("Claude policy extraction failed: %s", exc)
         return None
-
-
-def _stub_policy_from_text(text: str) -> PolicyDocument:
-    """Deterministic minimal policy used by tests (POLICY_EXTRACTOR_STUB=1)."""
-    return PolicyDocument(
-        name="Stub Policy (test)",
-        effective_date="2026-01-01",
-        thresholds={
-            "pre_auth": 50.0,
-            "receipt_required": 50.0,
-            "tip_meal_max_pct": 20.0,
-            "tip_service_max_pct": 15.0,
-        },
-        restrictions={"mcc_blocked": [7993, 7995], "mcc_fleet_exempt": [5541, 5542]},
-        approval_thresholds_by_role={},
-        auto_approval_rules=AutoApprovalConfig(
-            enabled=True,
-            rules=[
-                AutoApprovalRule(
-                    id="fleet_small",
-                    max_amount=500.0,
-                    mcc_in=[5541, 5542],
-                    rationale="Routine fleet expense",
-                )
-            ],
-        ),
-        submission_requirements=[
-            SubmissionRequirement(
-                id="receipt_above_threshold",
-                applies_when={"amount_over": 50},
-                require=["receipt"],
-                rationale="Receipt required above pre-auth threshold",
-            )
-        ],
-        sections=[
-            PolicySection(id="general", title="General", body=text[:500])
-        ],
-    )

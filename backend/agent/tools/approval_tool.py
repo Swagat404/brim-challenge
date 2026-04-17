@@ -525,10 +525,17 @@ Rules:
 """
 
 
+class AIRecommendationError(RuntimeError):
+    """Raised when the AI recommendation can't be obtained.
+
+    Surfaced to the caller (FastAPI route or seed script) — never silently
+    masked with a heuristic answer. The caller decides how to inform the
+    user (e.g. the approvals UI shows a 'recommendation pending' state).
+    """
+
+
 async def _ask_claude(context: dict, *, missing: list[dict]) -> dict:
     prompt = _PROMPT_TEMPLATE.format(context=json.dumps(context, indent=2, default=str))
-    fallback_reasoning = _fallback_reasoning(context, missing)
-
     try:
         client = anthropic.AsyncAnthropic()
         msg = await asyncio.wait_for(
@@ -539,59 +546,33 @@ async def _ask_claude(context: dict, *, missing: list[dict]) -> dict:
             ),
             timeout=25.0,
         )
-        raw = msg.content[0].text.strip()
-        if raw.startswith("```"):
-            lines = raw.split("\n")
-            raw = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
-        parsed = json.loads(raw)
-        decision = parsed.get("decision", "review").lower()
-        if decision not in {"approve", "review", "reject"}:
-            decision = "review"
-        return {
-            "decision": decision,
-            "reasoning": parsed.get("reasoning") or fallback_reasoning["reasoning"],
-            "policy_citation": parsed.get("policy_citation") or fallback_reasoning["policy_citation"],
-            "cited_section_id": parsed.get("cited_section_id") or "",
-        }
+    except asyncio.TimeoutError as exc:
+        raise AIRecommendationError("AI recommendation timed out") from exc
     except Exception as exc:
-        logger.warning("AI recommendation failed: %s — using fallback", exc)
-        return fallback_reasoning
+        raise AIRecommendationError(f"AI recommendation call failed: {exc}") from exc
 
+    raw = msg.content[0].text.strip()
+    if raw.startswith("```"):
+        lines = raw.split("\n")
+        raw = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
 
-def _fallback_reasoning(context: dict, missing: list[dict]) -> dict:
-    """Non-LLM fallback so the system still produces a structured response on API failure."""
-    if missing:
-        m = missing[0]
-        return {
-            "decision": "review",
-            "reasoning": (
-                f"Missing required fields ({', '.join(m['missing'])}) for this transaction. "
-                f"{m['rationale']}"
-            ),
-            "policy_citation": m["rationale"],
-            "cited_section_id": "",
-        }
-    txn = context.get("transaction", {})
-    if txn.get("is_fleet_operation"):
-        return {
-            "decision": "approve",
-            "reasoning": "Fleet operation expense — consistent with role and category exemption.",
-            "policy_citation": "Fleet MCC exempt from pre-auth threshold",
-            "cited_section_id": "",
-        }
-    if float(txn.get("amount_cad", 0)) > 1000:
-        return {
-            "decision": "review",
-            "reasoning": (
-                f"${txn.get('amount_cad'):.0f} exceeds typical non-fleet expense — "
-                "manual review recommended."
-            ),
-            "policy_citation": "Discretionary review for high-value charges",
-            "cited_section_id": "",
-        }
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError) as exc:
+        raise AIRecommendationError(f"AI returned non-JSON output: {raw[:200]}") from exc
+
+    decision = (parsed.get("decision") or "").lower()
+    if decision not in {"approve", "review", "reject"}:
+        raise AIRecommendationError(
+            f"AI returned invalid decision {decision!r} — expected approve|review|reject"
+        )
+    reasoning = (parsed.get("reasoning") or "").strip()
+    if not reasoning:
+        raise AIRecommendationError("AI returned an empty reasoning field")
+
     return {
-        "decision": "approve",
-        "reasoning": "Within normal range for role and department.",
-        "policy_citation": "Within standard expense pattern",
-        "cited_section_id": "",
+        "decision": decision,
+        "reasoning": reasoning,
+        "policy_citation": (parsed.get("policy_citation") or "").strip(),
+        "cited_section_id": (parsed.get("cited_section_id") or "").strip(),
     }

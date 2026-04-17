@@ -13,8 +13,12 @@ from tests.conftest import seed_transactions
 
 
 @pytest.fixture
-def approval_db(tmp_db):
-    """Seed one employee + one transaction over the $50 threshold."""
+def approval_db(tmp_db, policy_doc):
+    """Seed one employee + one transaction over the $50 threshold.
+
+    Depends on `policy_doc` so `load_policy()` (called inside ApprovalTool)
+    has a structured policy to read from — there's no fallback any more.
+    """
     import sqlite3
     conn = sqlite3.connect(str(tmp_db))
     conn.execute(
@@ -117,8 +121,8 @@ def test_ai_recommend_fallback_fleet_mcc():
     policy = {"pre_auth_threshold": 50.0}
     txn = {"amount_cad": 600.0, "merchant": "Flying J", "merchant_category_code": 5541,
            "transaction_date": "2024-03-10"}
-    # Updated for the new flow: _ask_claude is a module-level helper,
-    # and the fallback returns "approve" for fleet MCC.
+    # No-fallback policy: when Claude raises, _ask_claude must propagate
+    # AIRecommendationError rather than silently inventing a heuristic answer.
     from agent.tools import approval_tool
 
     context = {
@@ -135,15 +139,16 @@ def test_ai_recommend_fallback_fleet_mcc():
             )
             return await approval_tool._ask_claude(context, missing=[])
 
-    result = asyncio.run(run_it())
-    assert result["decision"] == "approve"
-    assert "fleet" in result["reasoning"].lower() or "driver" in result["reasoning"].lower()
+    import pytest as _pytest
+    with _pytest.raises(approval_tool.AIRecommendationError):
+        asyncio.run(run_it())
 
 
-def test_ai_recommend_fallback_high_amount():
-    """Fallback for high non-fleet amounts must default to 'review' (not the
-    legacy 'deny') — Sift Policy Agent leans conservative."""
+def test_ai_recommend_rejects_invalid_decision():
+    """If Claude returns a decision string outside {approve|review|reject},
+    _ask_claude raises rather than coercing to a default."""
     from agent.tools import approval_tool
+    import pytest as _pytest
 
     context = {
         "transaction": {
@@ -152,12 +157,13 @@ def test_ai_recommend_fallback_high_amount():
         },
         "employee": {"name": "Bob", "role": "Manager"},
     }
+    fake_response = MagicMock()
+    fake_response.content = [MagicMock(text='{"decision": "maybe", "reasoning": "huh"}')]
+
     async def run_it():
         with patch("anthropic.AsyncAnthropic") as mock_cls:
-            mock_cls.return_value.messages.create = AsyncMock(
-                side_effect=RuntimeError("API down")
-            )
+            mock_cls.return_value.messages.create = AsyncMock(return_value=fake_response)
             return await approval_tool._ask_claude(context, missing=[])
 
-    result = asyncio.run(run_it())
-    assert result["decision"] == "review"
+    with _pytest.raises(approval_tool.AIRecommendationError, match="invalid decision"):
+        asyncio.run(run_it())

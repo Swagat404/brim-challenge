@@ -90,21 +90,32 @@ async def policy_summary():
 
 @router.get("/policy/rules")
 async def get_policy_rules():
-    """Return parsed policy rules for the read-only policy viewer."""
-    policy = load_policy()
+    """Return parsed policy rules for the read-only policy viewer.
+
+    Reads the live structured policy. 503 if nothing's bootstrapped — the
+    /policy editor surfaces an upload prompt in that state.
+    """
+    from data.policy_loader import PolicyNotBootstrappedError
+    from fastapi import HTTPException
+
+    try:
+        policy = load_policy()
+    except PolicyNotBootstrappedError as exc:
+        raise HTTPException(503, str(exc))
+
     return {
-        "pre_auth_threshold": policy.get("pre_auth_threshold", 50.0),
-        "receipt_required_above": policy.get("receipt_required_above", 50.0),
-        "tip_service_max_pct": policy.get("tip_service_max_pct", 15.0),
-        "tip_meal_max_pct": policy.get("tip_meal_max_pct", 20.0),
-        "alcohol_customer_only": policy.get("alcohol_customer_only", True),
-        "personal_card_fees_reimbursed": policy.get("personal_card_fees_reimbursed", False),
-        "mcc_restricted": policy.get("mcc_restricted", []),
-        "approval_thresholds": policy.get("approval_thresholds", {}),
-        "source": policy.get("source", "fallback"),
+        "pre_auth_threshold": policy["pre_auth_threshold"],
+        "receipt_required_above": policy["receipt_required_above"],
+        "tip_service_max_pct": policy["tip_service_max_pct"],
+        "tip_meal_max_pct": policy["tip_meal_max_pct"],
+        "alcohol_customer_only": policy["alcohol_customer_only"],
+        "personal_card_fees_reimbursed": policy["personal_card_fees_reimbursed"],
+        "mcc_restricted": policy["mcc_restricted"],
+        "approval_thresholds": policy["approval_thresholds"],
+        "source": policy["source"],
         "fleet_mcc_codes": sorted(FLEET_MCC_CODES),
         "mcc_descriptions": {str(k): v for k, v in MCC_DESCRIPTIONS.items()},
-        "policy_sections": policy.get("policy_sections", {}),
+        "policy_sections": policy["policy_sections"],
     }
 
 

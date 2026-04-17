@@ -52,8 +52,29 @@ def _client():
 
 
 def test_upload_returns_diff_then_confirm_persists(tmp_db, monkeypatch):
-    # Force the deterministic test extractor — no network calls
-    monkeypatch.setenv("POLICY_EXTRACTOR_STUB", "1")
+    # Mock the Claude call inside the extractor instead of using an env-flag
+    # stub — same effect, but the production code path has zero "test mode"
+    # branches.
+    from services import policy_pdf_extractor
+
+    canned = {
+        "name": "Uploaded Test Policy",
+        "effective_date": "2026-05-01",
+        "thresholds": {"pre_auth": 75, "receipt_required": 75,
+                        "tip_meal_max_pct": 18, "tip_service_max_pct": 12},
+        "restrictions": {"mcc_blocked": [7993], "mcc_fleet_exempt": [5541]},
+        "approval_thresholds_by_role": {},
+        "auto_approval_rules": {"enabled": True, "rules": [
+            {"id": "fleet_small", "max_amount": 500, "mcc_in": [5541], "rationale": "fuel ok"},
+        ]},
+        "submission_requirements": [
+            {"id": "rcpt", "applies_when": {"amount_over": 75}, "require": ["receipt"],
+             "rationale": "receipt required"},
+        ],
+        "sections": [{"id": "general", "title": "General", "body": "Be reasonable.",
+                      "hidden_notes": []}],
+    }
+    monkeypatch.setattr(policy_pdf_extractor, "_ask_claude", lambda _text: canned)
 
     # Need a current policy to diff against
     from data import policy_loader
@@ -71,7 +92,7 @@ def test_upload_returns_diff_then_confirm_persists(tmp_db, monkeypatch):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["proposal_id"]
-    assert body["proposed"]["name"] == "Stub Policy (test)"
+    assert body["proposed"]["name"] == "Uploaded Test Policy"
     # The diff should mention `name` since we changed it
     assert "name" in body["diff"]
 
@@ -81,7 +102,7 @@ def test_upload_returns_diff_then_confirm_persists(tmp_db, monkeypatch):
         json={"proposal_id": body["proposal_id"]},
     )
     assert r2.status_code == 200
-    assert r2.json()["document"]["name"] == "Stub Policy (test)"
+    assert r2.json()["document"]["name"] == "Uploaded Test Policy"
 
     # The applied policy is now current; an activity row was emitted
     conn = sqlite3.connect(str(tmp_db))

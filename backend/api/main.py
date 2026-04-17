@@ -46,12 +46,29 @@ async def lifespan(app: FastAPI):
     # ── Startup ───────────────────────────────────────────────────────────────
     try:
         from data import db
-        from data.policy_loader import load_policy
+        from data.policy_loader import (
+            PolicyNotBootstrappedError,
+            load_structured_policy,
+        )
 
-        # Warm up policy cache (reads PDF or falls back to hardcoded rules)
-        policy = load_policy()
-        logger.info("Policy loaded — source=%s, pre_auth_threshold=$%.0f",
-                    policy.get("source", "unknown"), policy.get("pre_auth_threshold", 0))
+        # Warm up the structured-policy cache. If nothing's bootstrapped yet
+        # we DON'T crash the app — the admin needs to be able to use the
+        # /policy upload flow to populate it.
+        doc = load_structured_policy()
+        if doc is None:
+            logger.warning(
+                "No policy document loaded. Run "
+                "`python data_pipeline/bootstrap_policy_doc.py` or upload a "
+                "policy PDF via the /policy editor before the AI tools will work."
+            )
+        else:
+            thresholds = doc.get("thresholds", {}) or {}
+            logger.info(
+                "Policy loaded: '%s' | pre_auth=$%s | sections=%d",
+                doc.get("name"),
+                thresholds.get("pre_auth"),
+                len(doc.get("sections", [])),
+            )
 
         # Sanity-check DB
         emp_count = db.query_df("SELECT COUNT(*) as n FROM employees").iloc[0]["n"]

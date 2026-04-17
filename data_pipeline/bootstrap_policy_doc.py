@@ -6,14 +6,12 @@ Idempotent — safe to re-run. If a current policy already exists you must pass
 
 Path: same code path the user-facing PDF upload route uses
 (`backend/services/policy_pdf_extractor.extract_structured_policy`). One source
-of truth for "PDF -> structured JSON".
+of truth for "PDF -> structured JSON". Always calls Claude — no fallback.
 
 Run:
     cd "/path/to/repo"
     python data_pipeline/bootstrap_policy_doc.py            # skip if current exists
     python data_pipeline/bootstrap_policy_doc.py --force    # replace
-    POLICY_EXTRACTOR_STUB=1 python data_pipeline/bootstrap_policy_doc.py --force
-        # offline / test mode (no Claude call)
 """
 from __future__ import annotations
 
@@ -74,10 +72,7 @@ def main() -> None:
         with open(args.pdf, "rb") as f:
             pdf_bytes = f.read()
 
-        print(f"Extracting policy from {args.pdf} ({len(pdf_bytes)} bytes)...")
-        if os.environ.get("POLICY_EXTRACTOR_STUB") == "1":
-            print("  (POLICY_EXTRACTOR_STUB=1 — using deterministic test extractor)")
-
+        print(f"Extracting policy from {args.pdf} ({len(pdf_bytes)} bytes) via Claude...")
         doc = extract_structured_policy(pdf_bytes)
         if doc is None:
             print("Extraction failed. No policy bootstrapped.", file=sys.stderr)

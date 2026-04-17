@@ -5,6 +5,7 @@ import json
 import os
 import sqlite3
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,8 +13,18 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture(autouse=True)
 def _stub_ocr(monkeypatch):
-    """Force the OCR stub so receipt upload tests don't hit Claude vision."""
-    monkeypatch.setenv("OCR_STUB", "1")
+    """Mock receipt OCR at the function level so tests don't hit Claude vision.
+
+    Production has no env-flag escape hatch — `services.receipt_ocr.ocr_receipt`
+    always calls the real model. Tests patch the function with a deterministic
+    return value.
+    """
+    from services import receipt_ocr
+    monkeypatch.setattr(
+        receipt_ocr,
+        "ocr_receipt",
+        lambda path: f"[mock OCR for {Path(path).name}] line items would appear here",
+    )
 
 
 def _client():
@@ -100,8 +111,8 @@ def test_upload_receipt_stores_file_and_ocr(policy_doc, tmp_db):
     assert r.status_code == 200
     body = r.json()
     assert body["submission"]["receipt_url"].startswith(f"/uploads/receipts/{txn_rowid}/")
-    # Stub OCR returned a known-shape string
-    assert "[stub OCR" in (body["submission"]["receipt_ocr_text"] or "")
+    # The mocked OCR (see _stub_ocr fixture) returns a known-shape string
+    assert "[mock OCR" in (body["submission"]["receipt_ocr_text"] or "")
 
     # Activity row emitted
     conn = sqlite3.connect(str(tmp_db))

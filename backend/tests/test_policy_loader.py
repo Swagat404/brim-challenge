@@ -1,83 +1,80 @@
 """
-Test 1: PDF fallback.
+policy_loader: structured-policy load + the legacy flat-view adapter.
 
-policy_loader.load_policy() must return a usable dict even when:
-  - the PDF file doesn't exist
-  - the PDF is corrupt / empty
-  - pdfplumber raises an exception
-
-The fallback dict must contain pre_auth_threshold and tip_meal_max_pct.
+There is intentionally no fallback dict and no PDF re-parsing here — the
+single source of truth is the `policy_documents` table populated by
+`data_pipeline/bootstrap_policy_doc.py`. If nothing's bootstrapped, both
+loaders behave deterministically (one returns None, the other raises).
 """
 from __future__ import annotations
 
-import os
-import sys
-from unittest.mock import patch, MagicMock
+import json
+import sqlite3
+
+import pytest
 
 
-def _fresh_load_policy():
-    """Import policy_loader with a cleared lru_cache."""
+def test_load_structured_policy_returns_none_when_empty(tmp_db):
     from data import policy_loader
-    policy_loader.load_policy.cache_clear()
-    return policy_loader
+    policy_loader._structured_cache["doc"] = None
+    assert policy_loader.load_structured_policy() is None
 
 
-def test_fallback_when_pdf_missing(tmp_path, monkeypatch):
-    """load_policy() returns fallback dict when PDF path doesn't exist."""
-    monkeypatch.setenv("POLICY_PDF_PATH", str(tmp_path / "nonexistent.pdf"))
-    loader = _fresh_load_policy()
-    policy = loader.load_policy()
-
-    assert "pre_auth_threshold" in policy
-    assert "tip_meal_max_pct" in policy
-    assert isinstance(policy["pre_auth_threshold"], (int, float))
-    assert policy["pre_auth_threshold"] > 0
-    assert policy.get("source") == "fallback"
-
-
-def test_fallback_when_pdf_corrupt(tmp_path, monkeypatch):
-    """load_policy() returns fallback dict when PDF is corrupt bytes."""
-    corrupt_pdf = tmp_path / "bad.pdf"
-    corrupt_pdf.write_bytes(b"\x00\x01NOTAPDF\xff\xfe")
-
-    monkeypatch.setenv("POLICY_PDF_PATH", str(corrupt_pdf))
-    loader = _fresh_load_policy()
-    policy = loader.load_policy()
-
-    assert "pre_auth_threshold" in policy
-    assert policy.get("source") == "fallback"
-
-
-def test_fallback_when_pdfplumber_raises(tmp_path, monkeypatch):
-    """load_policy() returns fallback dict when pdfplumber itself throws."""
-    dummy_pdf = tmp_path / "dummy.pdf"
-    dummy_pdf.write_bytes(b"%PDF-1.4 fake")
-
-    monkeypatch.setenv("POLICY_PDF_PATH", str(dummy_pdf))
-    loader = _fresh_load_policy()
-
-    with patch("pdfplumber.open", side_effect=RuntimeError("pdfplumber exploded")):
-        policy = loader.load_policy()
-
-    assert "pre_auth_threshold" in policy
-    assert policy.get("source") == "fallback"
-
-
-def test_fallback_values_are_sensible(tmp_path, monkeypatch):
-    """The hardcoded fallback rules are within reasonable business ranges."""
-    monkeypatch.setenv("POLICY_PDF_PATH", str(tmp_path / "no.pdf"))
-    loader = _fresh_load_policy()
-    policy = loader.load_policy()
-
-    # Pre-auth threshold: Brim default is $50
-    assert 10 <= policy["pre_auth_threshold"] <= 1000
-    # Tip max: 0–50% is a reasonable policy range
-    assert 0 < policy["tip_meal_max_pct"] <= 50
-
-
-def test_fleet_mcc_codes_populated():
-    """FLEET_MCC_CODES must include common fleet codes (fuel, permits)."""
+def test_load_policy_raises_when_no_document(tmp_db):
     from data import policy_loader
-    # 5541 = Gas Station, 9399 = Government Services (permits)
+    policy_loader._structured_cache["doc"] = None
+    with pytest.raises(policy_loader.PolicyNotBootstrappedError):
+        policy_loader.load_policy()
+
+
+def test_load_policy_flattens_thresholds(policy_doc, tmp_db):
+    from data import policy_loader
+    flat = policy_loader.load_policy()
+    # Thresholds come straight from the structured doc
+    assert flat["pre_auth_threshold"] == 50.0
+    assert flat["receipt_required_above"] == 50.0
+    assert flat["tip_meal_max_pct"] == 20.0
+    assert flat["tip_service_max_pct"] == 15.0
+    # Restricted MCCs forwarded
+    assert 7993 in flat["mcc_restricted"]
+    # Sections exposed by id
+    assert "general" in flat["policy_sections"]
+    assert flat["source"] == "structured_policy"
+
+
+def test_load_policy_alcohol_heuristic_defaults_true(policy_doc, tmp_db):
+    """Sections that don't mention alcohol leave alcohol_customer_only at True
+    (the actual Brim policy stance)."""
+    from data import policy_loader
+    flat = policy_loader.load_policy()
+    assert flat["alcohol_customer_only"] is True
+
+
+def test_fleet_mcc_codes_reads_from_structured_policy(policy_doc, tmp_db):
+    from data import policy_loader
+    # Fleet exempt set was seeded with the canonical fleet MCCs
     assert 5541 in policy_loader.FLEET_MCC_CODES
     assert 9399 in policy_loader.FLEET_MCC_CODES
+    # Iteration works (the consumer code uses both)
+    assert 5541 in list(policy_loader.FLEET_MCC_CODES)
+
+
+def test_fleet_mcc_codes_empty_when_no_policy(tmp_db):
+    """Without a bootstrapped policy, no MCC is treated as fleet — the safe
+    default. (Better than crashing every consumer that does `mcc in
+    FLEET_MCC_CODES`.)"""
+    from data import policy_loader
+    policy_loader._structured_cache["doc"] = None
+    assert 5541 not in policy_loader.FLEET_MCC_CODES
+    assert len(policy_loader.FLEET_MCC_CODES) == 0
+
+
+def test_save_then_load_round_trip(policy_doc, tmp_db):
+    from data import policy_loader
+    doc = policy_loader.load_structured_policy()
+    doc["thresholds"]["pre_auth"] = 75.0
+    policy_loader.save_structured_policy(doc, updated_by="test")
+    policy_loader._structured_cache["doc"] = None
+
+    flat = policy_loader.load_policy()
+    assert flat["pre_auth_threshold"] == 75.0
