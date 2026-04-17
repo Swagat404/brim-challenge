@@ -138,11 +138,28 @@ _ID_KEYED_ARRAYS = {"sections", "submission_requirements"}
 
 
 def _smart_merge(current: dict, patch: dict) -> dict:
+    """Patch a structured policy without losing unspecified keys.
+
+    Three merge strategies:
+      1. Top-level dicts (e.g. `thresholds`, `restrictions`,
+         `approval_thresholds_by_role`) — DEEP-MERGE keys. Sending
+         `{thresholds: {receipt_required: 60}}` only updates that one
+         field; `pre_auth`, `tip_max_pct`, etc. are preserved.
+      2. Arrays of objects keyed by `id` (sections, submission_requirements,
+         auto_approval_rules.rules) — match by `id` and field-merge each
+         match; new items append.
+      3. Everything else — flat replace (scalars, schema_version, name…).
+    """
     out = {**current}
     for k, new_val in patch.items():
-        if k == "auto_approval_rules" and isinstance(new_val, dict) and "rules" in new_val:
+        if k == "auto_approval_rules" and isinstance(new_val, dict):
             existing_rules = (current.get("auto_approval_rules") or {}).get("rules", [])
-            merged_rules = _merge_by_id(existing_rules, new_val["rules"])
+            incoming_rules = new_val.get("rules") if "rules" in new_val else None
+            merged_rules = (
+                _merge_by_id(existing_rules, incoming_rules)
+                if incoming_rules is not None
+                else existing_rules
+            )
             out["auto_approval_rules"] = {
                 **(current.get("auto_approval_rules") or {}),
                 **new_val,
@@ -153,6 +170,13 @@ def _smart_merge(current: dict, patch: dict) -> dict:
         if k in _ID_KEYED_ARRAYS and isinstance(new_val, list):
             existing = current.get(k) or []
             out[k] = _merge_by_id(existing, new_val)
+            continue
+
+        # Deep-merge top-level dicts so a partial patch doesn't wipe
+        # unrelated keys (the bug that caused `thresholds: {receipt_required: 60}`
+        # to drop `pre_auth` and `tip_max_pct`).
+        if isinstance(new_val, dict) and isinstance(current.get(k), dict):
+            out[k] = {**current[k], **new_val}
             continue
 
         out[k] = new_val

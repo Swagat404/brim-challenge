@@ -81,7 +81,15 @@ class PolicyEditorTool(BaseTool):
         if not params.edit:
             return self.err("propose_edit requires an `edit` object")
         current = policy_loader.load_structured_policy() or {}
-        diff = _diff(current, params.edit)
+        # CRITICAL: compute the diff against the smart-merged result, NOT
+        # against the raw edit dict. The agent typically sends only the
+        # changed array items (e.g. one section out of six), and a naive
+        # before/after diff would show every other section as "removed".
+        # Apply would do the right thing via _smart_merge — the diff has
+        # to mirror that or the user sees a misleading wall of red.
+        from api.routes.policy_doc import _smart_merge
+        merged = _smart_merge(current, params.edit)
+        diff = _diff(current, _project(merged, params.edit.keys()))
         # The agent loop watches for `_policy_proposal` in the result data and
         # emits a POLICY_PROPOSAL SSE event so the /policy editor can render
         # the diff inline with Accept / Reject buttons. The user clicks the
@@ -163,3 +171,10 @@ def _diff(current: dict, edit: dict) -> dict:
         if json.dumps(before, sort_keys=True, default=str) != json.dumps(after, sort_keys=True, default=str):
             out[k] = {"before": before, "after": after}
     return out
+
+
+def _project(source: dict, keys) -> dict:
+    """Pick only the named keys from `source`. Used to scope the post-merge
+    snapshot to the fields the user actually touched, so the diff doesn't
+    include unrelated keys that happened to live in the policy."""
+    return {k: source.get(k) for k in keys}

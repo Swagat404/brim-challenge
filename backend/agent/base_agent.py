@@ -85,7 +85,23 @@ def _build_analytics_prompt() -> str:
     return ANALYTICS_PROMPT_BODY + window_note
 
 
-ANALYTICS_PROMPT_BODY = """You are Sift, an AI-powered expense intelligence assistant for a fleet trucking company.
+ANALYTICS_PROMPT_BODY = """You are Sift, an expense intelligence analyst for a fleet trucking company.
+
+Voice and formatting rules — these are non-negotiable:
+- No emojis. Ever. Not in body text, not in headings, not in tables. The
+  audience is a finance manager. Emojis make the answer look unserious.
+- No purple-prose intros ("Here's a breakdown of…", "Sure! Let me…"). Open
+  the answer with the data, not with throat-clearing.
+- Keep it tight. Short sentences. One idea per line. Markdown tables and
+  short bullet lists only when they add clarity.
+- When showing money, use $X,XXX.XX with a thousands separator and CAD
+  unless asked otherwise.
+- Don't restate what the user asked. Don't end with offers ("let me know
+  if you'd like…").
+- Don't narrate your tool calls. The UI shows "Querying…" status lines
+  separately while you work; never write your own "running query" lines.
+
+
 You have access to 8 months of transaction data (Sep 2025 – Mar 2026) covering ~50 employees
 across 7 departments operating in the USA and Canada.
 
@@ -136,6 +152,37 @@ How you propose policy changes:
   unless the user has explicitly said "apply" or "accept" first.
 - After proposing, briefly tell the user which fields changed and why,
   and let them decide.
+
+PROPOSE FAST. The user reviews the diff in the editor with Accept / Reject
+buttons — that IS the confirmation step. Do NOT verbally re-confirm before
+proposing. Do NOT ask follow-up questions just to be polite. If you have
+enough information to propose a sensible default, propose it.
+
+Cascade rules — the policy has several distinct dollar thresholds that
+sometimes coincidentally share the same value:
+
+  * `thresholds.receipt_required`     — gate for "must attach a receipt"
+  * `thresholds.pre_auth`             — gate for "must pre-authorize"
+  * `approval_thresholds_by_role.*`   — per-role approval ceilings
+  * `submission_requirements[].body`  — text mirroring one of the above
+  * `sections[].body`                 — narrative that may quote any of them
+
+When the user says "change X to Y":
+
+1. Update the canonical field that owns X.
+2. Update mirrored `submission_requirements` whose body is a literal
+   restatement of X (e.g. `receipt-over-threshold` body when the user
+   changes `receipt_required`). These are coupled — out-of-sync is a bug.
+3. For section narratives that quote X AND ONLY X, include them too.
+4. For section narratives that quote X alongside a DIFFERENT distinct
+   threshold (same dollar value, different concept), LEAVE them alone —
+   then mention this once in your follow-up message so the user knows
+   it was intentional. Don't ask permission first; just do the safe
+   thing and tell them.
+
+You ONLY ask a clarifying question when the user's request is genuinely
+ambiguous about WHICH field to change (e.g. "raise the threshold to $100"
+without specifying which threshold). One question, then propose.
 
 Other tools at your disposal:
 - `manage_policy_suggestions`: list / generate / apply / dismiss the
@@ -256,38 +303,39 @@ class ExpenseAgent:
                 yield AgentEvent(type=EventType.DONE)
                 return
 
-            # Execute tools and collect results
-            tool_results: list[dict] = []
+            # Emit one TOOL_START per call up-front so the UI shows them all
+            # at once (parallel-feel, not a serial cascade).
             for tc in tool_calls:
-                tool_name = tc["name"]
-                tool_input = tc["input"]
-                tool_id = tc["id"]
-
                 yield AgentEvent(
                     type=EventType.TOOL_START,
-                    tool_name=tool_name,
-                    tool_input=tool_input,
+                    tool_name=tc["name"],
+                    tool_input=tc["input"],
                 )
 
+            # Execute tools concurrently — the model often calls 2-3 in a turn
+            # (one per metric/breakdown). Sequential awaits add seconds; parallel
+            # cuts that to the slowest single tool.
+            async def _run(tc: dict) -> tuple[dict, Any]:
                 progress_q: asyncio.Queue = asyncio.Queue()
-                result = await self._dispatch_tool(tool_name, tool_input, progress_q)
-
-                # Drain progress messages emitted by the tool
+                res = await self._dispatch_tool(tc["name"], tc["input"], progress_q)
+                # Drain (don't surface) progress queue
                 while not progress_q.empty():
-                    msg = progress_q.get_nowait()
-                    yield AgentEvent(
-                        type=EventType.TEXT_DELTA,
-                        text=f"\n_{msg.get('message', '')}_",
-                    )
+                    progress_q.get_nowait()
+                return tc, res
+
+            results = await asyncio.gather(*[_run(tc) for tc in tool_calls])
+
+            tool_results: list[dict] = []
+            for tc, result in results:
+                tool_name = tc["name"]
+                tool_id = tc["id"]
 
                 # Emit chart event separately so frontend can render it
                 if result.chart:
                     yield AgentEvent(type=EventType.CHART, chart=result.chart, tool_name=tool_name)
 
                 # Surface a pending policy edit to the /policy editor so it
-                # can render the diff inline with Accept / Reject. The
-                # policy_editor_tool's `propose_edit` marks its first data row
-                # with `_policy_proposal: True`.
+                # can render the diff inline with Accept / Reject.
                 first_row = result.data[0] if result.data else None
                 if isinstance(first_row, dict) and first_row.get("_policy_proposal"):
                     yield AgentEvent(
