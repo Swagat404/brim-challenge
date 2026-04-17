@@ -109,7 +109,7 @@ export default function DocsPage() {
     <div className="fixed inset-0 z-50 bg-white text-zinc-900 overflow-hidden font-sans">
       {/* Top bar */}
       <header className="h-14 border-b border-zinc-200 flex items-center justify-between px-6 bg-white/95 backdrop-blur z-20 relative">
-        <Link href="/welcome" className="flex items-center gap-2 group">
+        <Link href="/" className="flex items-center gap-2 group">
           <Image
             src="/sift-logo.png"
             alt="Sift"
@@ -122,14 +122,14 @@ export default function DocsPage() {
         </Link>
         <div className="flex items-center gap-3">
           <Link
-            href="/welcome"
+            href="/"
             className="hidden sm:flex items-center gap-1.5 text-[13px] font-semibold text-zinc-600 hover:text-zinc-900 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Welcome
           </Link>
           <Link
-            href="/"
+            href="/dashboard"
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-zinc-900 hover:bg-black text-white text-[12.5px] font-bold transition-colors"
           >
             Open Sift
@@ -178,6 +178,11 @@ export default function DocsPage() {
             {/* ─────────── GET STARTED ─────────── */}
 
             <Section id="overview" eyebrow="Get started" title="What is Sift?">
+              <Video
+                src="/docs/siftdemo.mp4"
+                poster="/docs/shot1.png"
+                caption="Quick tour: Sift in action — policy-aware recommendations, dashboard, and workflows."
+              />
               <p>
                 Sift is the finance team&apos;s AI co-pilot for expense
                 management. It applies your written expense policy to
@@ -831,14 +836,14 @@ $500 equipment cap and $75/month internet stipend.`}
 
             <div className="mt-16 mb-8 pt-8 border-t border-zinc-200 flex items-center justify-between">
               <Link
-                href="/welcome"
+                href="/"
                 className="text-[13px] font-semibold text-zinc-500 hover:text-zinc-900 flex items-center gap-1.5"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Back to welcome
               </Link>
               <Link
-                href="/"
+                href="/dashboard"
                 className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-zinc-900 hover:bg-black text-white text-[13px] font-bold transition-colors"
               >
                 Try Sift
