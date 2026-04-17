@@ -1,3 +1,10 @@
-# Receipt uploads — local files, never committed.
+# Receipt uploads — runtime user uploads stay local;
+# but the seeded demo receipts ship with the deploy so the demo
+# always has working thumbnails.
 *
 !.gitignore
+# Re-include directories so git descends into them
+!*/
+!**/*.png
+!**/*.jpg
+!**/*.jpeg

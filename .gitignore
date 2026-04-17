@@ -28,6 +28,8 @@ venv/
 # Database
 *.db
 *.sqlite
+# but ship the seeded demo DB inside the backend so deployments boot with data
+!backend/brim_expenses.db
 *.sqlite3
 
 # IDE / Editor
@@ -60,3 +62,7 @@ policy-enforcer/
 # but always ship product assets shipped with the frontend (logo, docs screenshots, etc.)
 !frontend/public/**/*.png
 !frontend/public/**/*.mp4
+# and ship seeded demo receipts so the deployed app has working thumbnails
+!backend/uploads/**/*.png
+!backend/uploads/**/*.jpg
+!backend/uploads/**/*.jpeg

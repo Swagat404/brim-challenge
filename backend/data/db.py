@@ -23,8 +23,27 @@ import pandas as pd
 
 
 def _db_path() -> str:
-    path = os.environ.get("DB_PATH", "../brim_expenses.db")
-    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", path))
+    # 1) Explicit DB_PATH env var wins (use absolute paths in production).
+    explicit = os.environ.get("DB_PATH")
+    if explicit:
+        return os.path.abspath(explicit)
+
+    # 2) Walk a small set of likely locations so the same code works in:
+    #    - local dev (DB at project root, run from backend/)
+    #    - Docker / Railway with backend/ as the deploy root
+    #    - tests pointing at a temp DB
+    here = os.path.dirname(__file__)
+    candidates = [
+        os.path.join(here, "..", "..", "brim_expenses.db"),  # project root (local dev)
+        os.path.join(here, "..", "brim_expenses.db"),        # backend/ (containerized)
+    ]
+    for c in candidates:
+        abs_c = os.path.abspath(c)
+        if os.path.exists(abs_c):
+            return abs_c
+    # 3) Fall back to the project-root expectation so first-run errors are
+    #    obvious instead of silently writing a new empty DB somewhere weird.
+    return os.path.abspath(candidates[0])
 
 
 @contextmanager
